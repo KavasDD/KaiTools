@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import time
+import tempfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,14 +19,19 @@ with socket.socket() as sock:
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
 command = [args.executable] if args.executable else [sys.executable, str(ROOT / "toolbox/selfsoftware2/app/server.py")]
+error_output = tempfile.TemporaryFile()
 process = subprocess.Popen(command + ["--port", str(port), "--no-browser"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                           stdout=subprocess.DEVNULL, stderr=error_output)
 try:
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         if process.poll() is not None:
-            raise RuntimeError(process.stderr.read().decode("utf-8", "replace"))
+            # A one-file bootloader's child may inherit stderr. Reading a PIPE
+            # would wait for that child indefinitely even after the parent exits.
+            error_output.seek(0)
+            raise RuntimeError("Application exited with code " + str(process.returncode)
+                               + ': ' + error_output.read().decode("utf-8", "replace"))
         try:
             with opener.open(f"http://127.0.0.1:{port}/", timeout=1) as response:
                 assert "元器件规格描述生成器" in response.read().decode("utf-8")
@@ -82,3 +88,4 @@ finally:
     else:
         process.terminate()
     process.wait(timeout=10)
+    error_output.close()
