@@ -57,9 +57,20 @@ namespace CadenceToolbox
                     Application.DoEvents();
                     var categories = Field<ListBox>(form, "mCats");
                     var split = Field<SplitContainer>(form, "mSplit");
-                    foreach (Size size in new[] { new Size(1024, 598), new Size(820, 480), new Size(1400, 800) })
+                    foreach (Size requested in new[] { new Size(1024, 598), new Size(820, 480), new Size(1400, 800) })
                     {
-                        form.ClientSize = size;
+                        // Hosted runners can have a small virtual desktop. Windows
+                        // clamps restored bounds to that desktop; test sizes that fit
+                        // it so a normal OS adjustment is not reported as data loss.
+                        Rectangle desktop = Screen.FromControl(form).WorkingArea;
+                        int borderWidth = form.Width - form.ClientSize.Width;
+                        int borderHeight = form.Height - form.ClientSize.Height;
+                        form.Location = desktop.Location;
+                        form.ClientSize = new Size(
+                            Math.Min(requested.Width, Math.Max(1, desktop.Width - borderWidth)),
+                            Math.Min(requested.Height, Math.Max(1, desktop.Height - borderHeight)));
+                        Application.DoEvents();
+                        Size size = form.ClientSize;
                         for (int round = 0; round < 3; round++)
                         {
                             for (int i = 0; i < categories.Items.Count; i++)
