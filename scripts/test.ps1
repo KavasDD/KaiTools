@@ -1,6 +1,8 @@
 ﻿# SPDX-License-Identifier: GPL-3.0-only
 param([string]$Python = 'python', [string]$Tclsh = '', [string]$Root = (Split-Path -Parent $PSScriptRoot))
 $ErrorActionPreference = 'Stop'
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
 $root = [IO.Path]::GetFullPath($Root)
 $pythonExe = (Get-Command $Python -ErrorAction Stop).Source
 Push-Location $root
