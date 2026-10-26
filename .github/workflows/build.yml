@@ -24,6 +24,16 @@ jobs:
       - name: Build release from source
         shell: powershell
         run: ./scripts/build-release.ps1 -Python (Get-Command python).Source
+      - name: Install Tcllib JSON test dependency
+        shell: powershell
+        run: |
+          $jsonDir = Join-Path $env:RUNNER_TEMP 'xiaokai-tcllib-json'
+          New-Item -ItemType Directory -Force -Path $jsonDir | Out-Null
+          $base = 'https://raw.githubusercontent.com/tcltk/tcllib/2a63bf212cc6423efb7a39958596ae2a2333c266/modules/json'
+          foreach ($file in @('pkgIndex.tcl', 'json.tcl', 'json_tcl.tcl', 'json_write.tcl')) {
+            Invoke-WebRequest -UseBasicParsing -Uri "$base/$file" -OutFile (Join-Path $jsonDir $file)
+          }
+          ('TCLLIBPATH={' + $jsonDir.Replace('\', '/') + '}') | Out-File -LiteralPath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Launcher and startup optimizer checks
         shell: powershell
         run: |
