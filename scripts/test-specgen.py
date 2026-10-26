@@ -10,6 +10,7 @@ import sys
 import time
 import tempfile
 import urllib.request
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -84,11 +85,16 @@ try:
             assert response.status == 200 and response.read()
     with opener.open(f"http://127.0.0.1:{port}/api/schema", timeout=3) as response:
         assert json.load(response)["categories"]
+    with opener.open(f"http://127.0.0.1:{port}/api/status", timeout=3) as response:
+        status = json.load(response)
+    with opener.open(f"http://127.0.0.1:{port}/api/quit?" + urllib.parse.urlencode({'token': status['token']}), timeout=3) as response:
+        assert response.status == 200
+    process.wait(timeout=10)
     print("PASS: specification generator starts; HTML, assets and schema are available (" + ("EXE" if args.executable else "source") + ")")
 finally:
-    if sys.platform == 'win32':
+    if process.poll() is None and sys.platform == 'win32':
         subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True)
-    else:
+    elif process.poll() is None:
         process.terminate()
     process.wait(timeout=10)
     error_output.close()
