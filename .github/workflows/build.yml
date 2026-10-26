@@ -11,7 +11,6 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,9 +25,8 @@ jobs:
         run: ./scripts/build-release.ps1 -Python (Get-Command python).Source
       - name: Launcher and startup optimizer checks
         shell: powershell
-        timeout-minutes: 5
         run: |
-          ./toolbox/build.ps1 -Test -SkipInteractiveLayout
+          ./toolbox/build.ps1 -Test
           ./toolbox/startupoptimizer/build.ps1 -Test
           ./scripts/test.ps1 -Python (Get-Command python).Source
       - name: Installer self test

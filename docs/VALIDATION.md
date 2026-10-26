@@ -22,4 +22,4 @@
 
 本次自动测试不等于在 Capture 中重跑真实工程的全部功能。适配层测试使用模拟对象；既有 v1.6.44 及更早版本的 Capture CIS 17.4 人工/集成记录保留在各模块文档中，作为历史记录，不作为本次新增验证。大型 DXF 转换器没有执行完整构建和转换测试，发行包不包含其 EXE。在线器件与 3D 模型服务未作为离线测试的必要条件。
 
-GitHub Actions 另在 Windows runner 构建。云端明确跳过依赖交互桌面的最小化/恢复布局测试，该测试在本地执行；没有安装 Tcl / Tcllib 的 runner 会明确跳过 Tcl 套件。本地以上 Tcl 验证使用 Capture 附带的 Tcl 8.6.5。精确 Python 打包环境见根目录 `BUILD_ENVIRONMENT.json`。
+GitHub Actions 另在 Windows runner 构建。没有安装 Tcl / Tcllib 的 runner 会明确跳过 Tcl 套件，本地以上 Tcl 验证使用 Capture 附带的 Tcl 8.6.5。精确 Python 打包环境见根目录 `BUILD_ENVIRONMENT.json`。
