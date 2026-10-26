@@ -2,7 +2,7 @@
 
 面向 Windows 的 OrCAD / Allegro 工具启动器，以及用于 Capture 的原理图辅助插件。按分类查找本机已安装的 Cadence 工具，支持添加自己的软件快捷方式。
 
-![工具箱界面](toolbox/doc/ui.png)
+![小开工具箱 v1.6.45 界面](toolbox/doc/ui-v1.6.45.png)
 
 ## 下载与安装
 
