@@ -26,7 +26,7 @@ try {
     }
     if ($LASTEXITCODE -ne 0) { throw 'Corresponding source archive failed' }
     $files = @($sourceZip)
-    foreach ($name in @("XiaokaiToolbox-setup-v$version.exe", "小开工具箱-绿色版-v$version.zip")) {
+    foreach ($name in @("XiaokaiToolbox-setup-v$version.exe", "XiaokaiToolbox-portable-v$version.zip")) {
         $source = Join-Path $root "toolbox/dist/$name"
         if (-not (Test-Path -LiteralPath $source)) { throw "Build first: $source" }
         $target = Join-Path $outDir $name

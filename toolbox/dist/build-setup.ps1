@@ -43,7 +43,7 @@ if (-not $appVer)   { Die "Toolbox.cs 里读不到版本号" }
 if ($setupVer -ne $appVer) { Die "版本号不一致:Setup.cs=$setupVer,Toolbox.cs=$appVer" }
 Ok "v$setupVer"
 $installerName = "XiaokaiToolbox-setup-v$setupVer.exe"
-$portableName = "小开工具箱-绿色版-v$setupVer.zip"
+$portableName = "XiaokaiToolbox-portable-v$setupVer.zip"
 
 # ---- 2. 主程序重新编一遍,免得拿到旧的 ----
 Write-Host "`n[2/6] 编译主程序"
