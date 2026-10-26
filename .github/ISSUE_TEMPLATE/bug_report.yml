@@ -1,0 +1,21 @@
+name: 问题反馈
+description: 报告可以复现的问题
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 工具箱版本与运行环境
+      description: 例如 1.6.45、Windows 11、Capture CIS 17.4
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤、预期结果与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏日志或截图
+      description: 不要上传客户工程、个人配置、授权文件或账号凭据。

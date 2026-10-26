@@ -1,0 +1,78 @@
+{
+  "python": "3.12.15",
+  "platform": "win32",
+  "packages": [
+    {
+      "name": "altgraph",
+      "version": "0.17.5",
+      "licenses": [
+        "LICENSES/build-dependencies/altgraph/LICENSE"
+      ]
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "licenses": [
+        "LICENSES/build-dependencies/packaging/licenses/LICENSE",
+        "LICENSES/build-dependencies/packaging/licenses/LICENSE.APACHE",
+        "LICENSES/build-dependencies/packaging/licenses/LICENSE.BSD"
+      ]
+    },
+    {
+      "name": "pefile",
+      "version": "2024.8.26",
+      "licenses": [
+        "LICENSES/build-dependencies/pefile/LICENSE"
+      ]
+    },
+    {
+      "name": "pip",
+      "version": "25.0.1",
+      "licenses": [
+        "LICENSES/build-dependencies/pip/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "pyinstaller",
+      "version": "6.22.3",
+      "licenses": [
+        "LICENSES/build-dependencies/pyinstaller/licenses/COPYING.txt"
+      ]
+    },
+    {
+      "name": "pyinstaller-hooks-contrib",
+      "version": "2026.9",
+      "licenses": [
+        "LICENSES/build-dependencies/pyinstaller-hooks-contrib/licenses/LICENSE"
+      ]
+    },
+    {
+      "name": "pywin32-ctypes",
+      "version": "0.2.3",
+      "licenses": [
+        "LICENSES/build-dependencies/pywin32-ctypes/LICENSE.txt"
+      ]
+    },
+    {
+      "name": "setuptools",
+      "version": "84.2.1",
+      "licenses": [
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/LICENSE",
+        "LICENSES/build-dependencies/setuptools/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE.APACHE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE.BSD",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE.txt",
+        "LICENSES/build-dependencies/setuptools/licenses/LICENSE"
+      ]
+    }
+  ]
+}

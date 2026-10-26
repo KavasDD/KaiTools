@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>元器件规格描述生成器</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>元器件规格描述生成器</h1>
+  <span class="sub" id="stat">加载中…</span>
+  <button id="statmore" type="button" class="chip" hidden>运行状态</button>
+  <button id="editmode" type="button" class="chip" aria-pressed="false">改名称/选项</button>
+  <button id="quit" type="button" class="chip danger" hidden>退出程序</button>
+</header>
+
+<div id="statbox" hidden></div>
+
+<!-- 改动即时存进 config.json，重新生成规格表也不会丢 -->
+<div id="editbar" hidden>
+  <span class="ebtip">都是<b>点一下就能改</b>，回车生效、Esc 取消，改完自动存：
+    右边<b>栏位名称</b>那一列（默认整个分类一起改，勾「只改这一种」就只管当前这种）；
+    每栏后面的 <b>改选项</b> 改下拉内容（逗号分隔，留空变手填）；
+    左边<b>物料名</b>，以及它右边的 <b>藏</b> 收起用不到的物料。更新规格表也不会丢。</span>
+  <span id="ebmsg"></span>
+  <button id="ebdone" type="button" class="chip">改完了</button>
+</div>
+
+<main>
+  <aside>
+    <label class="lbl" for="q">搜索物料</label>
+    <input id="q" type="search" placeholder="输入名称，如 贴片电阻" autocomplete="off">
+    <div class="sidebtns">
+      <button id="expand" type="button" class="chip">展开全部</button>
+    </div>
+    <ul id="list" role="listbox" aria-label="物料类型列表"></ul>
+  </aside>
+
+  <section id="pane">
+    <div class="bar">
+      <label class="lbl" for="code">立创编号</label>
+      <input id="code" placeholder="C17414，或粘贴商品链接" autocomplete="off">
+      <button id="grab" type="button">抓取参数</button>
+      <button id="demo" type="button" class="ghost" hidden>填入示例值</button>
+      <button id="clear" type="button" class="ghost" hidden>清空</button>
+    </div>
+    <p id="msg" class="msg" hidden></p>
+
+    <div id="empty" class="empty">
+      先在左边选一种物料，再填立创编号抓取参数。
+    </div>
+
+    <div id="editor" hidden>
+      <h2 id="tname"></h2>
+      <p class="ref">表格示例：<span id="ref"></span></p>
+
+      <div id="form"></div>
+
+      <details id="extra" hidden>
+        <summary>立创上没用到的参数 <span id="extran"></span></summary>
+        <div id="extrabody"></div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer id="out" hidden>
+  <div class="outrow">
+    <span class="lbl">规格描述</span>
+    <button id="copy" type="button">复制</button>
+  </div>
+  <output id="desc" aria-live="polite"></output>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

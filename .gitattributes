@@ -1,0 +1,13 @@
+* text=auto eol=lf
+*.py text eol=lf
+*.tcl text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.ps1 text eol=crlf
+*.cs text eol=crlf
+*.ini text eol=crlf
+*.ico binary
+*.png binary
+LICENSE text eol=lf
+LICENSES/** -whitespace

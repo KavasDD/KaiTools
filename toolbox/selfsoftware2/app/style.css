@@ -1,0 +1,209 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+:root {
+  --bg: #f6f7f9; --panel: #fff; --line: #dcdfe4; --ink: #1f2328;
+  --dim: #656d76; --accent: #1f6feb; --warn: #9a6700; --warnbg: #fff8c5;
+  --fixed: #eaf5ea; --ok: #1a7f37;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  display: flex; flex-direction: column; height: 100vh;
+}
+header {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+h1 { font-size: 16px; margin: 0; }
+.sub { color: var(--dim); font-size: 12px; }
+
+/* 运行状态：控制台原来打印的东西挪到这里，点标题栏按钮展开 */
+#statbox {
+  flex: none; padding: 10px 16px; background: #f0f6ff;
+  border-bottom: 1px solid var(--line); font-size: 12px;
+}
+#statbox > div { display: flex; gap: 8px; padding: 1px 0; }
+#statbox .sk { color: var(--dim); width: 110px; flex: none; }
+#statbox .sv { color: var(--ink); word-break: break-all; }
+#statbox .snote { color: var(--dim); margin-top: 5px; }
+main { flex: 1; display: flex; min-height: 0; }
+
+aside {
+  width: 260px; flex: none; display: flex; flex-direction: column;
+  padding: 10px; gap: 8px; background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+#list { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 0; }
+#list .cat {
+  font-size: 12px; color: var(--dim); padding: 8px 6px 2px; font-weight: 600;
+}
+#list button {
+  display: block; width: 100%; text-align: left; padding: 5px 8px;
+  border: 0; border-radius: 4px; background: none; cursor: pointer;
+  font: inherit; color: inherit;
+}
+#list button:hover { background: #eef1f4; }
+#list button[aria-selected="true"] { background: var(--accent); color: #fff; }
+
+#pane { flex: 1; overflow: auto; padding: 14px 18px; }
+.empty { color: var(--dim); padding: 40px 0; text-align: center; }
+h2 { font-size: 15px; margin: 14px 0 4px; }
+.ref { color: var(--dim); font-size: 12px; margin: 0 0 12px; word-break: break-all; }
+
+.bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lbl { font-size: 12px; color: var(--dim); }
+input, select {
+  font: inherit; padding: 5px 7px; border: 1px solid var(--line);
+  border-radius: 4px; background: #fff; color: inherit; min-width: 0;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button {
+  font: inherit; padding: 5px 12px; border: 1px solid var(--accent);
+  border-radius: 4px; background: var(--accent); color: #fff; cursor: pointer;
+}
+button:hover { filter: brightness(1.08); }
+button.ghost { background: none; color: var(--accent); }
+button:disabled { opacity: .55; cursor: default; filter: none; }
+
+.msg { margin: 8px 0 0; padding: 6px 9px; border-radius: 4px; font-size: 13px; }
+.msg.err { background: #ffebe9; color: #a40e26; }
+.msg.ok { background: #dafbe1; color: var(--ok); }
+
+#form { display: grid; grid-template-columns: 140px 1fr; gap: 8px 10px; align-items: center; }
+#form .name { font-size: 13px; text-align: right; color: #3d444d; }
+#form .name .opt { color: var(--dim); font-weight: 400; }
+#form .fixedval {
+  padding: 5px 7px; background: var(--fixed); border: 1px solid #c3e0c3;
+  border-radius: 4px; font-size: 13px;
+}
+/* wrap 允许换行：改动模式下多出「改选项」和它展开的编辑框，得能落到下一行 */
+#form .wrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#form .wrap > input, #form .wrap > select { flex: 1; }
+#form .flag { font-size: 11px; color: var(--warn); background: var(--warnbg);
+  padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+
+#extra { margin-top: 16px; font-size: 13px; color: var(--dim); }
+#extra summary { cursor: pointer; }
+#extrabody { padding: 6px 0 0 14px; }
+
+footer {
+  flex: none; padding: 10px 18px; background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.outrow { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+#desc {
+  display: block; padding: 10px 12px; background: #f6f8fa;
+  border: 1px solid var(--line); border-radius: 4px;
+  font-family: Consolas, "Courier New", monospace; font-size: 13px;
+  /* 行高给足，描述常常要换两三行，挤在一起不好读 */
+  line-height: 1.9; word-break: break-all; min-height: 3.6em;
+}
+
+/* ---- 侧边栏：常用分类标红 + 分组折叠 ---- */.sidebtns { display: flex; gap: 6px; }
+.chip {
+  font-size: 12px; padding: 3px 9px; background: none;
+  color: var(--dim); border: 1px solid var(--line); border-radius: 999px;
+}
+.chip:hover { background: #eef1f4; }
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chip.danger { color: #a40e26; border-color: #f3c2c2; }
+.chip.danger:hover { background: #ffebe9; }
+
+/* 点了退出后整页替换成这句话 */
+.byebye {
+  padding: 60px 20px; text-align: center; color: var(--dim);
+  font-size: 14px; line-height: 2;
+}
+
+/* 分类标题栏：要覆盖 #list button 的通用样式，否则长得像物料项 */
+#list button.cathead {
+  display: flex; align-items: center; gap: 5px; width: 100%;
+  padding: 7px 6px 3px; background: none; border: 0; border-radius: 0;
+  color: var(--dim); font-size: 12px; font-weight: 600; text-align: left;
+}
+#list button.cathead:hover { background: #eef1f4; }
+#list .cat.fav button.cathead { color: #cf222e; }   /* 常用分类标红 */
+#list .cathead .tw { color: var(--dim); font-size: 10px; width: 9px; }
+#list .cathead .cname { flex: 1; }
+#list .cathead .cnt {
+  font-weight: 400; font-size: 11px; color: var(--dim);
+  background: #eef1f4; border-radius: 999px; padding: 0 6px;
+}
+#list .cat.fav .cnt { background: #ffebe9; color: #cf222e; }
+
+
+/* 改名称 / 改选项：就地改，不做弹窗。开了改动模式，能改的地方自己长出来 */
+#editbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; background: #fff8c5; border-bottom: 1px solid #eed888;
+  font-size: 12px;
+}
+.ebtip { flex: 1; color: #573a08; line-height: 1.6; }
+.ebtip b { color: #953800; }
+#ebmsg { color: var(--dim); white-space: nowrap; }
+#ebmsg.bad { color: #cf222e; white-space: normal; }
+#ebmsg.ok { color: #1a7f37; }
+
+/* 改动模式下名字是可点的，给个虚线下划线暗示一下 */
+#list button.rn { border-bottom: 1px dashed #d0a215; border-radius: 4px 4px 0 0; }
+#list button.rn:hover { background: #fff8c5; }
+.fixedval.rn {
+  cursor: pointer; border-bottom: 1px dashed #d0a215;
+}
+.fixedval.rn:hover { background: #fff8c5; }
+
+/* 藏按钮压在列表项右边，平时不显形，鼠标过去才亮 */
+#list li.rnli { position: relative; }
+#list li.rnli button.hidebtn {
+  position: absolute; right: 2px; top: 3px; width: auto;
+  padding: 1px 6px; font-size: 11px; color: var(--dim);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  opacity: 0;
+}
+#list li.rnli:hover button.hidebtn, button.hidebtn:focus { opacity: 1; }
+#list li.rnli button.hidebtn:hover { background: #ffebe9; color: #cf222e; }
+
+/* 改过名的物料标一下，鼠标悬停能看到表格里原来叫什么 */
+.rntag {
+  margin-left: 5px; font-size: 10px; color: #1a7f37;
+  background: #dafbe1; border-radius: 999px; padding: 0 5px;
+}
+#list button[aria-selected="true"] .rntag { background: #ffffff59; color: #fff; }
+
+.renameinp { width: 100%; font: inherit; padding: 2px 4px; }
+
+/* 栏位名称那一列：改动模式下也能点 */
+#form .name.rn {
+  cursor: pointer; border-bottom: 1px dashed #d0a215;
+  border-radius: 3px 3px 0 0;
+}
+#form .name.rn:hover { background: #fff8c5; }
+#form .name.rn.changed { color: #1a7f37; }        /* 改过的标绿 */
+/* 编辑态要撑开：输入框加勾选框放不进 140px 的右对齐窄列 */
+#form .name.editing {
+  display: flex; flex-direction: column; gap: 3px; align-items: stretch;
+  text-align: left; border-bottom: 0; background: #fff8c5;
+  padding: 4px; border-radius: 4px;
+}
+.onlyone {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 10px; color: #573a08; white-space: nowrap; cursor: pointer;
+}
+.onlyone input { margin: 0; }
+
+.optbtn {
+  margin-left: 6px; font-size: 11px; color: var(--dim); background: none;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  cursor: pointer; white-space: nowrap;
+}
+.optbtn:hover { background: #fff8c5; color: #953800; border-color: #eed888; }
+
+/* 选项编辑框：撑满这一栏，压在字段下面一行 */
+/* .wrap 是 flex，用 100% 基准把自己挤到下一行，占满整栏 */
+.optedit {
+  flex: 0 0 100%; display: flex; align-items: center; gap: 6px;
+  margin-top: 5px; padding: 6px; background: #fff8c5;
+  border: 1px solid #eed888; border-radius: 5px; box-sizing: border-box;
+}
+.optedit input { flex: 1; font-size: 12px; }
+.opttip { font-size: 11px; color: var(--dim); white-space: nowrap; }
