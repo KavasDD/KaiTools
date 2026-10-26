@@ -80,7 +80,7 @@ def say(msg):
     if sys.stdout is not None:
         try:
             print(msg)
-        except OSError:
+        except (OSError, UnicodeError):
             pass
 
 

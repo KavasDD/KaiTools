@@ -20,8 +20,11 @@ with socket.socket() as sock:
     port = sock.getsockname()[1]
 command = [args.executable] if args.executable else [sys.executable, str(ROOT / "toolbox/selfsoftware2/app/server.py")]
 error_output = tempfile.TemporaryFile()
+child_env = os.environ.copy()
+# Verify source startup also survives an output stream that cannot encode Chinese.
+child_env['PYTHONIOENCODING'] = 'ascii'
 process = subprocess.Popen(command + ["--port", str(port), "--no-browser"],
-                           stdout=subprocess.DEVNULL, stderr=error_output)
+                           stdout=subprocess.DEVNULL, stderr=error_output, env=child_env)
 try:
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + 45
