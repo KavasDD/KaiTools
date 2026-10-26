@@ -144,7 +144,8 @@ $base  = @('/nologo','/target:winexe','/optimize+','/warnaserror-','/codepage:65
 if (Test-Path $ico) { $base += "/win32icon:$ico" }
 
 # 卸载程序也要 logo.ico,不然它的界面上没有图标。
-& $csc @base @refs '/define:UNINSTALLER' "/resource:$ico,logo.ico" "/out:$unin" $src
+$legalResources = @($res | Where-Object { $_ -match ',legal\.' })
+& $csc @base @refs @legalResources '/define:UNINSTALLER' "/resource:$ico,logo.ico" "/out:$unin" $src
 if ($LASTEXITCODE -ne 0) { Die "卸载程序编译失败" }
 Ok ("uninstall.exe  {0:N0} 字节" -f (Get-Item $unin).Length)
 

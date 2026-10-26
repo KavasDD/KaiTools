@@ -1318,6 +1318,26 @@ namespace XiaokaiSetup
             }
             catch (Exception ex) { R.Warn("扫目录出错:" + ex.Message); }
 
+            // Remove only license files recorded in this version's embedded manifest.
+            // Unknown user files inside LICENSES are preserved.
+            foreach (string resource in LegalNotices.Names)
+            {
+                string relative = LegalNotices.FileName(resource);
+                if (!relative.StartsWith("LICENSES" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) continue;
+                string file = Path.Combine(Dir, relative);
+                try
+                {
+                    if (File.Exists(file)) { File.Delete(file); done++; }
+                    string parent = Path.GetDirectoryName(file);
+                    while (parent != Dir && Directory.Exists(parent)
+                           && Directory.GetFileSystemEntries(parent).Length == 0)
+                    {
+                        Directory.Delete(parent);
+                        parent = Path.GetDirectoryName(parent);
+                    }
+                }
+                catch { stuck.Add(relative); }
+            }
             R.Ok("删掉 " + done + " 个文件");
             if (stuck.Count > 0)
                 R.Warn("这几个删不掉(可能还被占用):" + string.Join("、", stuck.ToArray()));
