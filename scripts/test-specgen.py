@@ -41,12 +41,32 @@ try:
             import ctypes
             from ctypes import wintypes
             user = ctypes.windll.user32
+            kernel = ctypes.windll.kernel32
+            kernel.OpenProcess.restype = wintypes.HANDLE
+            kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+            kernel.CloseHandle.argtypes = [wintypes.HANDLE]
             callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            def describe_text(hwnd, unused):
+                value = ctypes.create_unicode_buffer(4096)
+                user.GetWindowTextW(hwnd, value, len(value))
+                if value.value:
+                    print('Application dialog: ' + value.value, file=sys.stderr)
+                return True
             def describe(hwnd, unused):
-                title = ctypes.create_unicode_buffer(4096)
-                user.GetWindowTextW(hwnd, title, len(title))
-                if title.value:
-                    print('Window: ' + title.value, file=sys.stderr)
+                pid = wintypes.DWORD()
+                user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                owned = pid.value == process.pid
+                if args.executable:
+                    handle = kernel.OpenProcess(0x1000, False, pid.value)
+                    if handle:
+                        image = ctypes.create_unicode_buffer(32768)
+                        length = wintypes.DWORD(len(image))
+                        owned = bool(kernel.QueryFullProcessImageNameW(handle, 0, image, ctypes.byref(length))) and Path(image.value) == Path(args.executable).resolve()
+                        kernel.CloseHandle(handle)
+                if owned:
+                    describe_text(hwnd, 0)
+                    user.EnumChildWindows(hwnd, callback(describe_text), 0)
                 return True
             user.EnumWindows(callback(describe), 0)
         raise RuntimeError("Local server did not start within 45 seconds")
