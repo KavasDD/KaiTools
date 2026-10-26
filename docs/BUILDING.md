@@ -42,6 +42,8 @@ powershell -NoProfile -File scripts/test.ps1 -Python .\.venv\Scripts\python.exe 
 
 主程序自检会报告开发机上的 Cadence 安装探测；未安装 Cadence 时跳过真实安装探测，仍检查假目录、清单、图标、布局等逻辑。Tcl 测试在独立进程运行，失败立即终止；tcltest 的失败数也会转换为非零退出码。
 
+GitHub runner 没有可靠的交互桌面，CI 使用 `build.ps1 -Test -SkipInteractiveLayout`，明确跳过最小化/恢复测试；本地完整验证仍使用普通 `-Test`。
+
 安装器的 `/selftest` 只运行内建载荷、界面和模拟插件安装生命周期检查，不会在真实 Cadence 目录执行安装：
 
 ```powershell

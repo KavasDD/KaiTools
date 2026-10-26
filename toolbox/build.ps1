@@ -8,7 +8,8 @@
 # 产物是 toolbox\out\XiaokaiToolbox.exe 加同目录的 tools.ini。
 param(
     [string]$Root = (Split-Path -Parent $PSCommandPath),
-    [switch]$Test
+    [switch]$Test,
+    [switch]$SkipInteractiveLayout
 )
 $ErrorActionPreference = 'Stop'
 
@@ -151,6 +152,7 @@ if ($Test) {
     $rc = $LASTEXITCODE
     # 自检只是构建期的检查,产物目录里不留它 —— 免得跟着 exe 一起被分发。
     Remove-Item $texe -Force -ErrorAction SilentlyContinue
+    if (-not $SkipInteractiveLayout) {
     $layoutExe = Join-Path $out 'LayoutTest.exe'
     $layoutArgs = @('/nologo', '/target:exe', '/codepage:65001',
         '/main:CadenceToolbox.LayoutTest', "/out:$layoutExe") + $refs + @(
@@ -161,6 +163,7 @@ if ($Test) {
     $layoutResult = $LASTEXITCODE
     Remove-Item -LiteralPath $layoutExe -Force -ErrorAction SilentlyContinue
     if ($layoutResult -ne 0) { throw "layout test failed with exit code $layoutResult" }
+    } else { Write-Host 'SKIP interactive minimize/restore layout tests (run locally with -Test).' }
     if ($rc -ne 0) { throw "self-test failed with exit code $rc" }
 }
 
