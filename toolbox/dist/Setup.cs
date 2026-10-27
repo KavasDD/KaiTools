@@ -49,7 +49,7 @@ namespace XiaokaiSetup
     {
         // 跟 Toolbox.cs 里的 Version 保持一致 —— build-setup.ps1 会核对,不一致直接
         // 报错。发版必须动这里(见 ship-requires-version-bump 笔记)。
-        public const string Version  = "1.6.45";
+        public const string Version  = "1.6.47";
         public const string AppName  = "小开工具箱";
         public const string AppExe   = "XiaokaiToolbox.exe";
         public const string UninExe  = "uninstall.exe";
@@ -165,6 +165,9 @@ namespace XiaokaiSetup
 
     static class CapturePlugins
     {
+        public static string SelectedPath;
+        const string SettingsKey = @"Software\XiaokaiToolbox";
+
         static readonly string[] Resources = {
             "lceda2orcadMenu.tcl", "bomtoolMenu.tcl",
             "netlocatorMenu.tcl", "drctoolMenu.tcl", "textaffixMenu.tcl", "xiaokaiSchematicPlugins.tcl"
@@ -214,7 +217,11 @@ namespace XiaokaiSetup
                 }
                 foreach (string candidate in candidates)
                 {
-                    if (!Directory.Exists(candidate)) continue;
+                    // Capture 已初始化用户配置，但 capAutoLoad 可能尚未创建。
+                    string captureRoot = Path.GetDirectoryName(Path.GetDirectoryName(candidate));
+                    if (!Directory.Exists(candidate)
+                        && !(Path.GetFileName(captureRoot).Equals("OrCAD_Capture", StringComparison.OrdinalIgnoreCase)
+                             && Directory.Exists(captureRoot))) continue;
                     string full = Path.GetFullPath(candidate);
                     if (!seen.Add(full)) continue;
                     string capture = Directory.GetParent(Directory.GetParent(full).FullName).FullName;
@@ -230,14 +237,117 @@ namespace XiaokaiSetup
             catch (NotSupportedException) { }
         }
 
-        public static List<CaptureTarget> FindTargets()
+        static void AddProductTarget(List<CaptureTarget> targets, HashSet<string> seen, string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try
+            {
+                string root = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim().Trim('"')));
+                if (File.Exists(root)) root = Path.GetDirectoryName(root);
+                for (int i = 0; i < 5 && !string.IsNullOrEmpty(root); i++)
+                {
+                    string autoLoad = Path.Combine(root, "tools", "capture", "tclscripts", "capAutoLoad");
+                    if (File.Exists(Path.Combine(root, "tools", "bin", "Capture.exe"))
+                        || File.Exists(Path.Combine(root, "tools", "capture", "Capture.exe")))
+                    {
+                        AddTarget(targets, seen, autoLoad);
+                        return;
+                    }
+                    root = Path.GetDirectoryName(root);
+                }
+            }
+            catch (ArgumentException) { }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (NotSupportedException) { }
+        }
+
+        public static List<CaptureTarget> TargetsForPath(string path)
+        {
+            var targets = new List<CaptureTarget>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddTarget(targets, seen, path);
+            if (targets.Count == 0) AddProductTarget(targets, seen, path);
+            return targets;
+        }
+
+        public static void SaveSelectedPath()
+        {
+            if (string.IsNullOrEmpty(SelectedPath)) return;
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(SettingsKey))
+                key.SetValue("CaptureAutoLoad", SelectedPath);
+        }
+
+        public static void PrepareTargets(List<CaptureTarget> targets)
+        {
+            foreach (CaptureTarget target in targets)
+            {
+                Directory.CreateDirectory(target.AutoLoad);
+                string probe = Path.Combine(target.AutoLoad, ".xiaokai-write-test-" + Guid.NewGuid().ToString("N"));
+                using (FileStream stream = new FileStream(probe, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, 1, FileOptions.DeleteOnClose)) { stream.WriteByte(0); }
+            }
+        }
+
+        public static string TestDiscovery()
+        {
+            string sandbox = Path.Combine(Path.GetTempPath(), "xk-capture-discovery-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string product = Path.Combine(sandbox, "custom", "SPB_17.4");
+                string bin = Path.Combine(product, "tools", "bin");
+                string native = Path.Combine(product, "tools", "capture", "tclscripts", "capAutoLoad");
+                Directory.CreateDirectory(bin);
+                Directory.CreateDirectory(native);
+                File.WriteAllText(Path.Combine(bin, "Capture.exe"), "test fixture");
+                foreach (string path in new string[] { product, bin, Path.Combine(bin, "Capture.exe"), native })
+                {
+                    List<CaptureTarget> targets = TargetsForPath(path);
+                    if (targets.Count != 1 || targets[0].AutoLoad != native) return "未识别产品目录或 Capture.exe：" + path;
+                }
+                string data = Path.Combine(sandbox, "custom", "SPB_Data");
+                string user = AutoLoadPath(data);
+                Directory.CreateDirectory(Path.Combine(data, "cdssetup", "OrCAD_Capture"));
+                List<CaptureTarget> userTargets = TargetsForPath(product);
+                if (userTargets.Count != 1 || userTargets[0].AutoLoad != user) return "未优先识别用户配置目录";
+                if (Directory.Exists(user)) return "目录探测不应创建目录";
+                PrepareTargets(userTargets);
+                if (!Directory.Exists(user)) return "未创建缺失的用户 capAutoLoad";
+                if (Directory.GetFiles(user).Length != 0) return "写权限检查留下临时文件";
+                if (TargetsForPath(Path.Combine(sandbox, "unrelated")).Count != 0) return "误识别无关目录";
+                Directory.Delete(native);
+                Directory.CreateDirectory(Path.Combine(sandbox, "empty", "tools", "capture", "tclscripts", "capAutoLoad"));
+                if (TargetsForPath(Path.Combine(sandbox, "empty")).Count != 0) return "误识别空壳产品目录";
+                return null;
+            }
+            catch (Exception ex) { return ex.ToString(); }
+            finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
+        }
+
+        public static List<CaptureTarget> FindTargets(string installDirectory)
         {
             List<CaptureTarget> targets = new List<CaptureTarget>();
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(SelectedPath)) return TargetsForPath(SelectedPath);
+            string specified = Environment.GetEnvironmentVariable("XIAOKAI_CAPTURE_AUTOLOAD");
+            if (!string.IsNullOrWhiteSpace(specified)) return TargetsForPath(specified);
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(SettingsKey))
+                if (key != null)
+                {
+                    AddTarget(targets, seen, key.GetValue("CaptureAutoLoad") as string);
+                    if (targets.Count > 0) return targets;
+                }
+
+            var products = new List<string>();
+            products.Add(installDirectory);
             foreach (string name in new string[] {
-                "HOME", "USERPROFILE", "CDS_INST_DIR", "SPB_17_4", "CDSROOT"
+                "HOME", "USERPROFILE", "CDS_INST_DIR", "SPB_17_4", "SPB_17_2", "SPB_16_6", "CDSROOT", "CDS_ROOT"
             })
-                AddTarget(targets, seen, Environment.GetEnvironmentVariable(name));
+            {
+                string value = Environment.GetEnvironmentVariable(name);
+                AddTarget(targets, seen, value);
+                products.Add(value);
+            }
 
             foreach (DriveInfo drive in DriveInfo.GetDrives())
             {
@@ -249,7 +359,26 @@ namespace XiaokaiSetup
                     "Program Files (x86)\\Cadence\\SPB_Data"
                 })
                     AddTarget(targets, seen, Path.Combine(root, relative));
+                foreach (string relative in new string[] {
+                    "Cadence", "orcad\\Cadence", "OrCAD", "Program Files\\Cadence",
+                    "Program Files (x86)\\Cadence", "Program Files\\OrCAD", "Program Files (x86)\\OrCAD"
+                })
+                {
+                    string parent = Path.Combine(root, relative);
+                    products.Add(parent);
+                    try
+                    {
+                        if (Directory.Exists(parent))
+                            products.AddRange(Directory.GetDirectories(parent));
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
             }
+            // 用户目录优先，避免同时向用户和产品目录写入相同插件，导致重复加载。
+            foreach (string product in products) AddTarget(targets, seen, product);
+            if (targets.Count == 0)
+                foreach (string product in products) AddProductTarget(targets, seen, product);
             return targets;
         }
 
@@ -290,7 +419,7 @@ namespace XiaokaiSetup
             File.Move(temp, path);
         }
 
-        public static bool Install(IReport report)
+        public static bool Install(IReport report, List<CaptureTarget> targets)
         {
             foreach (string resource in Resources)
                 if (!Payload.Has(resource))
@@ -299,11 +428,10 @@ namespace XiaokaiSetup
                     return false;
                 }
 
-            List<CaptureTarget> targets = FindTargets();
             if (targets.Count == 0)
             {
-                report.Fail("没有找到 OrCAD Capture 的用户 capAutoLoad 目录；"
-                          + "请确认已安装 Capture，或检查 HOME/CDS_INST_DIR 环境变量。");
+                report.Fail("没有找到 Capture 插件目录。请重新打开安装器并选择实际 Capture 安装目录，"
+                          + "或设置 XIAOKAI_CAPTURE_AUTOLOAD 为实际 capAutoLoad 路径。");
                 return false;
             }
 
@@ -317,6 +445,8 @@ namespace XiaokaiSetup
                 string backup = Path.Combine(target.PluginData, "original");
                 string modified = Path.Combine(target.PluginData, "modified");
                 string manifest = Path.Combine(target.PluginData, "managed.sha256");
+                report.Note("Capture 插件目录：" + target.AutoLoad);
+                Directory.CreateDirectory(target.AutoLoad);
                 Directory.CreateDirectory(target.PluginData);
                 Directory.CreateDirectory(backup);
                 Dictionary<string, string> previous = ReadManifest(manifest);
@@ -386,9 +516,9 @@ namespace XiaokaiSetup
             return text.Contains("xiaokaiSchematicPlugins");
         }
 
-        public static bool Uninstall(IReport report)
+        public static bool Uninstall(IReport report, string installDirectory)
         {
-            return UninstallTargets(FindTargets(), report);
+            return UninstallTargets(FindTargets(installDirectory), report);
         }
 
         static bool UninstallTargets(List<CaptureTarget> targets, IReport report)
@@ -910,6 +1040,38 @@ namespace XiaokaiSetup
             return IsTargetProcessPath(target, image);
         }
 
+        sealed class DirectoryTestReport : IReport
+        {
+            public void Step(string what) { }
+            public void Ok(string what) { }
+            public void Warn(string what) { throw new InvalidOperationException(what); }
+            public void Fail(string what) { throw new InvalidOperationException(what); }
+            public void Note(string what) { }
+            public void Bytes(long n) { }
+            public void Phase(string what) { }
+        }
+
+        internal static string TestInstallDirectory(bool forceCloseTools, bool existing)
+        {
+            string sandbox = Path.Combine(Path.GetTempPath(), "xk-install-dir-" + Guid.NewGuid().ToString("N"));
+            string target = Path.Combine(sandbox, "Cadence", "SPB_17.4", Info.DirName);
+            try
+            {
+                if (existing) Directory.CreateDirectory(target);
+                Worker worker = new Worker(new DirectoryTestReport(), target);
+                worker.ForceCloseTools = forceCloseTools;
+                if (!worker.CloseRunning()) return "检查旧进程失败";
+                if (Directory.Exists(target) != existing) return "进程检查意外改变了安装目录";
+                if (!worker.MakeDir() || !Directory.Exists(target)) return "创建安装目录失败";
+                return null;
+            }
+            catch (Exception ex) { return ex.ToString(); }
+            finally
+            {
+                if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true);
+            }
+        }
+
         // 进度条的分母。只算要写的字节,注册表和快捷方式那几步几乎不花时间。
         public long Total()
         {
@@ -924,10 +1086,22 @@ namespace XiaokaiSetup
             try
             {
                 R.Phase("正在安装");
+                R.Step("检查 Capture 插件目录");
+                List<CaptureTarget> captureTargets = CapturePlugins.FindTargets(Dir);
+                if (captureTargets.Count == 0)
+                {
+                    R.Fail("没有找到 Capture 插件目录，请重新打开安装器并选择实际 Capture 安装目录，"
+                         + "或设置 XIAOKAI_CAPTURE_AUTOLOAD 为实际 capAutoLoad 路径。");
+                    return false;
+                }
+                foreach (CaptureTarget target in captureTargets) R.Ok(target.AutoLoad);
+                CapturePlugins.PrepareTargets(captureTargets);
                 if (!CloseRunning()) return false;
                 if (!MakeDir()) return false;
                 if (!CopyFiles()) return false;
-                if (!CapturePlugins.Install(R)) return false;
+                if (!CapturePlugins.Install(R, captureTargets)) return false;
+                if (captureTargets.Count == 1) CapturePlugins.SelectedPath = captureTargets[0].AutoLoad;
+                CapturePlugins.SaveSelectedPath();
                 RemoveObsoletePluginInstallers();
                 Register();
                 MakeShortcuts();
@@ -961,8 +1135,18 @@ namespace XiaokaiSetup
                 StringComparer.OrdinalIgnoreCase);
             if (ForceCloseTools)
             {
-                foreach (string path in Directory.GetFiles(
-                    fullDir, "*.exe", SearchOption.TopDirectoryOnly))
+                string[] executables;
+                try
+                {
+                    executables = Directory.GetFiles(fullDir, "*.exe", SearchOption.TopDirectoryOnly);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    // 首次安装时目标目录及其父目录可能还不存在，没有旧进程需要关闭。
+                    // 仅忽略目录不存在；权限等错误仍交给安装流程报告。
+                    executables = new string[0];
+                }
+                foreach (string path in executables)
                 {
                     AddTargetPath(targetPaths, path);
                 }
@@ -1263,7 +1447,7 @@ namespace XiaokaiSetup
             {
                 R.Phase("正在卸载");
                 CloseRunning();
-                if (!KeepPlugins && !CapturePlugins.Uninstall(R)) return false;
+                if (!KeepPlugins && !CapturePlugins.Uninstall(R, Dir)) return false;
                 if (KeepPlugins) R.Note("按选择保留 OrCAD Capture 插件。");
                 UnShortcuts();
                 UnRegister();
@@ -1757,6 +1941,24 @@ namespace XiaokaiSetup
                     return;
                 }
                 dir = Path.GetFullPath(dir);
+                if (!Silent && CapturePlugins.FindTargets(dir).Count == 0)
+                {
+                    using (FolderBrowserDialog browser = new FolderBrowserDialog())
+                    {
+                        browser.Description = "未自动找到 Capture 插件目录。请选择实际 SPB 安装目录、SPB_Data 或 capAutoLoad 目录。";
+                        browser.ShowNewFolderButton = false;
+                        if (browser.ShowDialog(this) != DialogResult.OK) return;
+                        List<CaptureTarget> targets = CapturePlugins.TargetsForPath(browser.SelectedPath);
+                        if (targets.Count == 0)
+                        {
+                            MessageBox.Show(this, "所选位置未找到 Capture 插件目录。请确认 Capture 已安装并至少启动过一次，"
+                                + "再选择实际 SPB、SPB_Data 或 capAutoLoad 目录。",
+                                "未找到 Capture", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        CapturePlugins.SelectedPath = targets[0].AutoLoad;
+                    }
+                }
             }
 
             mBusy = true; mFailed = false; mDone = 0;
@@ -1965,6 +2167,8 @@ namespace XiaokaiSetup
             string pluginLifecycle = CapturePlugins.TestLifecycle();
             t("Capture 插件安装/升级/卸载恢复",
               pluginLifecycle == null, pluginLifecycle ?? "");
+            string discovery = CapturePlugins.TestDiscovery();
+            t("Capture 用户/产品目录探测、缺失目录准备和无关目录排除", discovery == null, discovery);
 
             // logo:构造出来不算,得真画一遍。ico 里的 PNG 条目能构造、Size 也对,
             // 但 DrawIcon 会抛 "Requested range extends past the end of the array"。
@@ -2018,6 +2222,16 @@ namespace XiaokaiSetup
               "磁盘根目录被安装位置检查接受");
 
             string targetExe = Path.Combine(Path.GetTempPath(), "xk-tools", "sample.exe");
+
+            foreach (bool force in new bool[] { true, false })
+                foreach (bool existing in new bool[] { false, true })
+                {
+                    string error = Worker.TestInstallDirectory(force, existing);
+                    t((existing ? "已有空目录" : "首次安装多级新目录")
+                        + (force ? "（强制关闭进程）" : "（正常关闭进程）"),
+                      error == null, error);
+                }
+
             string otherExe = Path.Combine(Path.GetTempPath(), "other-tools", "sample.exe");
             t("目标进程路径按完整路径精确匹配",
               Worker.TestIsTargetProcessPath(targetExe, targetExe.ToUpperInvariant())

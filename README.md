@@ -14,6 +14,8 @@
 
 运行环境：Windows 10 / 11、.NET Framework 4.x。OrCAD 插件已在 Capture CIS 17.4 上有历史验证记录；其他版本尚未验证。Cadence 软件由用户自行安装和取得授权，本项目不包含 Cadence 程序或许可证。
 
+安装器优先查找 Capture 用户配置目录，找不到时检查实际 Capture 安装目录。自动查找失败时会提示选择这台电脑上的 SPB 安装目录、SPB_Data 或 capAutoLoad，选择插件目录与工具箱安装位置是两回事。用户配置已存在但缺少 capAutoLoad 时会自动创建；写入权限会在复制工具文件前检查。也可设置环境变量 `XIAOKAI_CAPTURE_AUTOLOAD` 指向实际 capAutoLoad 目录。
+
 ## 功能
 
 | 功能 | 用途 |

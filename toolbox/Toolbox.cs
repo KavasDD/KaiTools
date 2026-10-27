@@ -30,8 +30,8 @@ using Microsoft.Win32;
 // 装的是哪一版("replacing version X with Y"),不写这个属性的话 csc 会填
 // 0.0.0.0,那句话就永远是错的。两处必须一致,自检里有一条在盯这个
 // (MainForm.Version 对 AssemblyVersion)。
-[assembly: System.Reflection.AssemblyFileVersion("1.6.45.0")]
-[assembly: System.Reflection.AssemblyVersion("1.6.45.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.6.47.0")]
+[assembly: System.Reflection.AssemblyVersion("1.6.47.0")]
 [assembly: System.Reflection.AssemblyTitle("小开工具箱")]
 
 namespace CadenceToolbox
@@ -1303,6 +1303,7 @@ namespace CadenceToolbox
             {
                 paths.Add(Path.GetFullPath(AutoLoadPath(path)));
                 paths.Add(Path.GetFullPath(AutoLoadPath(Path.Combine(path, "SPB_Data"))));
+                paths.Add(Path.GetFullPath(Path.Combine(path, "tools", "capture", "tclscripts", "capAutoLoad")));
                 if (name.Equals("SPB_Data", StringComparison.OrdinalIgnoreCase))
                     paths.Add(Path.GetFullPath(AutoLoadPath(Path.GetDirectoryName(path) ?? "")));
                 if (name.StartsWith("SPB_", StringComparison.OrdinalIgnoreCase))
@@ -1314,8 +1315,10 @@ namespace CadenceToolbox
         static List<string> FindAutoLoadPaths()
         {
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\XiaokaiToolbox"))
+                if (key != null) AddDirectory(paths, key.GetValue("CaptureAutoLoad") as string);
             foreach (string name in new[] {
-                "HOME", "USERPROFILE", "CDS_INST_DIR", "SPB_17_4",
+                "XIAOKAI_CAPTURE_AUTOLOAD", "HOME", "USERPROFILE", "CDS_INST_DIR", "SPB_17_4",
                 "SPB_17_2", "SPB_16_6", "CDSROOT"
             })
             {
@@ -1390,7 +1393,7 @@ namespace CadenceToolbox
         Control mBrdSection;
         Label mMineHeading;
         // public 是为了让自检能对着上面的 AssemblyFileVersion 比一遍。
-        public const string Version = "1.6.45";
+        public const string Version = "1.6.47";
 
         public MainForm()
         {
