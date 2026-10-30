@@ -22,7 +22,7 @@
 随工具箱安装包安装；安装后重启 Capture。临时加载可在 Capture Command Window 执行：
 
 ```tcl
-source {C:/path/to/XKGJX/autoload/textaffixMenu.tcl}
+source {D:/selfsoftware/autoload/textaffixMenu.tcl}
 textaffixMenuRun
 ```
 

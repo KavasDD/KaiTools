@@ -1057,7 +1057,7 @@ proc ::bomtool::runUI {action} {
             append message "\n\n\u6ce8\u610f\uff1a[get $result pending_packages] \u4e2a\u4f4d\u53f7\u7684\u5206\u90e8\u5c5e\u6027\u51b2\u7a81\uff0c\u6682\u672a\u8ba1\u5165\u5408\u5e76BOM\u3002\u8bf7\u67e5\u770bExcel\u7684\u544a\u8b66\u53ca\u8fc7\u6ee4\u6e05\u5355\uff0c\u6838\u5bf9\u540e\u518d\u7528\u4e8e\u91c7\u8d2d\u3002"
             set icon warning
         }
-        tk_messageBox -title "BOM\u6574\u7406\u5de5\u5177" -icon $icon -message $message
+        tk_messageBox -title "BOM\u8f93\u51fa\u589e\u5f3a\u7248" -icon $icon -message $message
     } err options]} {
         if {[get $options -code] == 0} { return }
         puts "BOM Workbench ERROR: $err"
@@ -1085,7 +1085,7 @@ proc ::bomtool::dialog {args} {
     set w .bomworkbench
     if {[winfo exists $w]} { showWindow $w; return }
     try {
-    toplevel $w; wm title $w "BOM\u6574\u7406\u5de5\u5177 $::bomtool::version - Capture CIS"
+    toplevel $w; wm title $w "BOM\u8f93\u51fa\u589e\u5f3a\u7248 $::bomtool::version - Capture CIS"
     label $w.title -text "\u8bfb\u53d6\u5f53\u524d\u539f\u7406\u56fe \u2192 \u6309\u4e03\u5217\u751f\u6210\u539f\u751fBOM \u2192 \u6574\u7406\u4e3aExcel" -padx 18 -pady 12
     pack $w.title
     foreach {id label action} [list export "\u81ea\u52a8\u751f\u6210\u5e76\u6574\u7406BOM" export a "\u5bfc\u5165\u5df2\u6709TXT/CSV\uff08\u53ef\u9009\uff09" A] {

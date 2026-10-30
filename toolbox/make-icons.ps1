@@ -10,11 +10,12 @@
 # 立创那半边用绿色,是它自己的品牌色,一眼能看出"从立创来"。
 #
 #   powershell -NoProfile -File toolbox\make-icons.ps1
+param([string]$Root = $PSScriptRoot)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$here = [IO.Path]::GetFullPath($Root)
 $sizes = 16, 24, 32, 48, 64, 128, 256
 
 function New-Bitmap([int]$s) {
@@ -475,6 +476,56 @@ function Save-Ico([string]$path, [scriptblock]$draw) {
     "  {0}  {1} bytes, {2} sizes" -f (Split-Path -Leaf $path), (Get-Item $path).Length, $sizes.Count
 }
 
+function New-MarkingLookupIcon([int]$s) {
+    $bmp, $g = New-Bitmap $s
+    $plate = Add-Plate $g $s ([Drawing.ColorTranslator]::FromHtml('#15566B'))
+    $plate.Dispose()
+    $g.ScaleTransform([single]($s / 100.0), [single]($s / 100.0))
+    $ink = [Drawing.Pen]::new([Drawing.Color]::FromArgb(241, 248, 252), 5)
+    $accent = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml('#FFC76A'), 8)
+    $ink.StartCap = $ink.EndCap = [Drawing.Drawing2D.LineCap]::Round
+    $accent.StartCap = $accent.EndCap = [Drawing.Drawing2D.LineCap]::Round
+    foreach ($offset in 29, 43) {
+        $g.DrawLine($ink, [single]$offset, [single]16, [single]$offset, [single]24)
+        $g.DrawLine($ink, [single]16, [single]$offset, [single]24, [single]$offset)
+        $g.DrawLine($ink, [single]$offset, [single]57, [single]$offset, [single]65)
+        $g.DrawLine($ink, [single]57, [single]$offset, [single]65, [single]$offset)
+    }
+    $g.DrawRectangle($ink, [single]24, [single]24, [single]33, [single]33)
+    if ($s -ge 24) { $g.DrawLine($ink, [single]34, [single]35, [single]46, [single]35) }
+    $lens = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml('#15566B'))
+    $g.FillEllipse($lens, [single]48, [single]48, [single]29, [single]29)
+    $g.DrawEllipse($accent, [single]48, [single]48, [single]29, [single]29)
+    $g.DrawLine($accent, [single]75, [single]75, [single]86, [single]86)
+    $lens.Dispose(); $ink.Dispose(); $accent.Dispose(); $g.Dispose()
+    $bmp
+}
+
+function New-StartupOptimizerIcon([int]$s) {
+    $bmp, $g = New-Bitmap $s
+    $plate = Add-Plate $g $s ([Drawing.ColorTranslator]::FromHtml('#244777'))
+    $plate.Dispose()
+    $g.ScaleTransform([single]($s / 100.0), [single]($s / 100.0))
+    $arc = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml('#F1F8FC'), 7)
+    $arc.StartCap = $arc.EndCap = [Drawing.Drawing2D.LineCap]::Round
+    $g.DrawArc($arc, [single]19, [single]22, [single]61, [single]61, [single]155, [single]230)
+    $needle = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml('#65DCF0'), 7)
+    $needle.StartCap = $needle.EndCap = [Drawing.Drawing2D.LineCap]::Round
+    $g.DrawLine($needle, [single]49, [single]57, [single]64, [single]38)
+    if ($s -ge 24) {
+        $g.DrawLine($arc, [single]29, [single]44, [single]33, [single]47)
+        $g.DrawLine($arc, [single]49, [single]30, [single]49, [single]34)
+    }
+    $bolt = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml('#FFC76A'))
+    $points = [Drawing.PointF[]]@(
+        [Drawing.PointF]::new(73, 52), [Drawing.PointF]::new(57, 74),
+        [Drawing.PointF]::new(69, 74), [Drawing.PointF]::new(65, 91),
+        [Drawing.PointF]::new(86, 65), [Drawing.PointF]::new(74, 65))
+    $g.FillPolygon($bolt, $points)
+    $bolt.Dispose(); $needle.Dispose(); $arc.Dispose(); $g.Dispose()
+    $bmp
+}
+
 Write-Host "writing icons into $here"
 Save-Ico (Join-Path $here 'lceda2orcad.ico') ${function:New-ConvertIcon}
 Save-Ico (Join-Path $here 'specgen.ico')     ${function:New-SpecIcon}
@@ -482,3 +533,5 @@ Save-Ico (Join-Path $here 'jlc3d.ico')       ${function:New-Jlc3dIcon}
 Save-Ico (Join-Path $here 'dwg2dxf.ico')     ${function:New-Dwg2DxfIcon}
 Save-Ico (Join-Path $here 'step2dxf.ico')    ${function:New-Step2DxfIcon}
 Save-Ico (Join-Path $here 'gerber2dxf.ico')  ${function:New-Gerber2DxfIcon}
+Save-Ico (Join-Path $here 'markinglookup.ico') ${function:New-MarkingLookupIcon}
+Save-Ico (Join-Path $here 'startupoptimizer.ico') ${function:New-StartupOptimizerIcon}

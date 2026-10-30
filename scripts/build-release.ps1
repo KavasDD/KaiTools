@@ -5,6 +5,7 @@ $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 $root = [IO.Path]::GetFullPath($Root)
 $pythonExe = (Get-Command $Python -ErrorAction Stop).Source
+$env:XIAOKAI_BUILD_PYTHON = $pythonExe
 Push-Location $root
 try {
     & $pythonExe -c 'import PyInstaller, tkinter'

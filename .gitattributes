@@ -11,3 +11,9 @@
 *.png binary
 LICENSE text eol=lf
 LICENSES/** -whitespace
+
+*.il binary
+*.dll binary
+toolbox/drc/vendor/*LICENSE* -whitespace
+toolbox/drc/vendor/*NOTICES* -whitespace
+toolbox/allegro/deferred/*.il.txt -whitespace

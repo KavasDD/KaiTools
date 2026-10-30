@@ -51,11 +51,11 @@ try {
     assert {$::locateCalls == 2}
     assert {[dict get $::located pin_info] eq "I1"}
     ::xiaokai::drc::uiNative
-    assert {[string first ORCAP-1831 [.xiaokaiDrcNative.text get 1.0 end]] >= 0}
+    assert {[string first ORCAP-1831 [.xiaokaiDrc.tabs.native.text get 1.0 end]] >= 0}
     set ::xiaokai::drc::query DOES_NOT_EXIST
     ::xiaokai::drc::render
     assert {[llength [$t children {}]] == 0}
-    assert {[wm title .xiaokaiDrc] eq "DRC\u4e2d\u6587\u589e\u5f3a\u7248"}
+    assert {[wm title .xiaokaiDrc] eq "DRC\u4e2d\u6587\u589e\u5f3a\u7248 v$::xiaokai::drc::version"}
     source [file join [file dirname [info script]] .. .. autoload xiaokaiSchematicPlugins.tcl]
     rename ::xiaokai::drc::run ::xiaokai::drc::savedRun
     set ::runCalls 0

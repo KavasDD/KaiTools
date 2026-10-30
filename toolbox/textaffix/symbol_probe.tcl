@@ -1,8 +1,7 @@
-set ::xkRepoRoot [file normalize [file join [file dirname [info script]] .. ..]]
 # SPDX-License-Identifier: GPL-3.0-only
 # Development probe: Capture can forward command-line scripts into an existing
 # process. Open only this disposable sample; never edit or close user designs.
-set ::xkSymbolDir $::xkRepoRoot/toolbox/textaffix/test-output/symbols
+set ::xkSymbolDir D:/selfsoftware/toolbox/textaffix/test-output/symbols
 file mkdir $::xkSymbolDir
 proc xkSymbolPump {} {
     set job $::xkSymbolDir/job.tcl
@@ -22,7 +21,7 @@ proc xkSymbolPump {} {
 set f [open $::xkSymbolDir/probe.log w]
 fconfigure $f -encoding utf-8 -buffering line
 try {
-    source $::xkRepoRoot/autoload/textaffixMenu.tcl
+    source D:/selfsoftware/autoload/textaffixMenu.tcl
     file copy -force C:/orcad/Cadence/SPB_17.4/tools/capture/samples/PCB-Layout/FullAdder/FULLADD.DSN $::xkSymbolDir/symbols.dsn
     set p [open $::xkSymbolDir/symbols.opj w]
     puts $p {(ExpressProject "" (ProjectVersion "19981106") (ProjectType "PCB") (Folder "Design Resources" (Folder "Library") (File ".\symbols.dsn" (Type "Schematic Design")) (RUN_Online_Rules "FALSE")) (Folder "Outputs") (Folder "Referenced Projects"))}

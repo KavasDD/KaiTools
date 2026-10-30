@@ -39,3 +39,7 @@ toolbox/dist/小开工具箱-绿色版/
 .idea/
 .DS_Store
 Thumbs.db
+
+!toolbox/drc/vendor/pdf-runtime/*.dll
+*.nupkg
+toolbox/dist/小开工具箱-绿色版/

@@ -1,7 +1,7 @@
 ﻿# SPDX-License-Identifier: GPL-3.0-only
-param([switch]$Test, [string]$Root = (Split-Path -Parent $PSCommandPath))
+param([switch]$Test)
 $ErrorActionPreference = 'Stop'
-$root = [IO.Path]::GetFullPath($Root)
+$root = Split-Path -Parent $PSCommandPath
 $outDir = Join-Path $root 'dist'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
@@ -9,7 +9,8 @@ if (-not (Test-Path -LiteralPath $csc)) { $csc = 'C:\Windows\Microsoft.NET\Frame
 $source = Join-Path $root 'StartupOptimizer.cs'
 $refs = @('/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll','/r:System.Windows.Forms.dll','/r:System.Xml.dll','/r:System.Xml.Linq.dll')
 $outputExe = Join-Path $outDir 'OrCAD启动优化工具.exe'
-& $csc /nologo /target:winexe /optimize+ /codepage:65001 "/out:$outputExe" @refs $source
+$icon = Join-Path (Split-Path -Parent $root) 'startupoptimizer.ico'
+& $csc /nologo /target:winexe /optimize+ /codepage:65001 "/win32icon:$icon" "/out:$outputExe" @refs $source
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }
 if ($Test) {
     $testDir = Join-Path $root 'test-output'

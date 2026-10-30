@@ -13,7 +13,7 @@ namespace eval ::xiaokai::drc {
 proc ::xiaokai::drc::foreground {} {
     set w .xiaokaiDrc
     if {![winfo exists $w]} {return}
-    wm title $w "DRC中文增强版"
+    wm title $w "DRC中文增强版 v$::xiaokai::drc::version"
     wm deiconify $w
     wm attributes $w -topmost 1
     raise $w
@@ -29,17 +29,26 @@ proc ::xiaokai::drc::pollFreshness {} {
     variable freshnessTimer; variable result; variable busy
     set freshnessTimer ""
     if {![winfo exists .xiaokaiDrc] || [wm state .xiaokaiDrc] eq "withdrawn"} {return}
-    if {!$busy && [dict exists $result rows]} {refreshFreshness $result}
+    if {!$busy && !$::xiaokai::drc::reviewWorking && [dict exists $result rows]} {refreshFreshness $result}
     watchFreshness
 }
 proc ::xiaokai::drc::refreshFreshness {checkedResult} {
     variable status; variable stale; variable completeStatus
-    if {$stale} {return 0}
+    if {$stale} {
+        if {$::xiaokai::drc::reviewVisible && [llength [info commands DboGraphicInstanceToDboGraphicCommentTextInst]]} {
+            if {[catch {reviewExpire $checkedResult} cleanup]} {set status "结果已过期，Text 撤下失败：$cleanup"}
+        }
+        return 0
+    }
     if {[catch {resultState $checkedResult} state]} {set state unavailable}
     switch $state {
         stale {
             set stale 1
             set status "设计已修改，结果待更新。请重新检查。"
+            # Only withdraw unchanged tool-owned notes from this same design.
+            if {[llength [info commands DboGraphicInstanceToDboGraphicCommentTextInst]]} {
+                if {[catch {reviewExpire $checkedResult} cleanup]} {append status " Text 撤下失败：$cleanup"}
+            }
             detailText "设计已修改，结果待更新。重新检查后可继续双击定位和导出。"
             .xiaokaiDrc.bar.export configure -state disabled
             return 0
@@ -75,18 +84,28 @@ proc ::xiaokai::drc::show {} {
     set w .xiaokaiDrc
     if {[winfo exists $w]} {foreground; return}
     toplevel $w
-    wm title $w "DRC中文增强版"
+    wm title $w "DRC中文增强版 v$::xiaokai::drc::version"
     wm attributes $w -topmost 1
     wm geometry $w 900x590
     wm minsize $w 640 430
     ttk::frame $w.bar -padding 10
     ttk::button $w.bar.check -text "检查当前设计" -command ::xiaokai::drc::uiCheck
-    ttk::entry $w.bar.search -textvariable ::xiaokai::drc::query -width 26
-    ttk::label $w.bar.label -text "搜索："
     ttk::button $w.bar.export -text "导出报告" -command ::xiaokai::drc::uiExport -state disabled
-    pack $w.bar.check -side left -padx {0 18}
-    pack $w.bar.label $w.bar.search -side left
-    pack $w.bar.export -side right
+    ttk::button $w.bar.text -text "一键放置 Text" -command ::xiaokai::drc::reviewButtonToggle
+    grid $w.bar.check -row 0 -column 0 -padx {0 10} -sticky w
+    grid $w.bar.text -row 0 -column 1 -padx {0 10} -sticky w
+    grid $w.bar.export -row 0 -column 4 -sticky e
+    grid columnconfigure $w.bar 2 -weight 1
+    ttk::notebook $w.tabs
+    foreach {name label} {results 检查结果 review {AI 核对} datasheet 器件手册 settings 设置 native 原生详情} {
+        ttk::frame $w.tabs.$name -padding 10
+        $w.tabs add $w.tabs.$name -text $label
+    }
+    ttk::frame $w.tabs.results.search
+    ttk::label $w.tabs.results.search.label -text "\u641c\u7d22\uff1a"
+    ttk::entry $w.tabs.results.search.entry -textvariable ::xiaokai::drc::query
+    pack $w.tabs.results.search.label -side left
+    pack $w.tabs.results.search.entry -side left -fill x -expand 1
     ttk::label $w.status -textvariable ::xiaokai::drc::status -padding {12 5}
     ttk::frame $w.list -padding {10 5}
     ttk::treeview $w.list.tree -columns {location count} -show {tree headings} -selectmode browse
@@ -103,16 +122,27 @@ proc ::xiaokai::drc::show {} {
     ttk::frame $w.bottom -padding 10
     text $w.bottom.text -height 6 -wrap word -font TkDefaultFont -relief flat -state disabled
     ttk::button $w.bottom.native -text "原生详细信息" -command ::xiaokai::drc::uiNative -state disabled
+    ttk::button $w.bottom.datasheet -text "器件手册" -command ::xiaokai::drc::datasheetShow
     pack $w.bottom.text -fill both -expand 1
     pack $w.bottom.native -side left -padx {0 10} -pady {8 0}
+    pack $w.bottom.datasheet -side left -pady {8 0}
     pack $w.bar $w.status -fill x
-    pack $w.bottom -side bottom -fill x
-    pack $w.list -fill both -expand 1
-    bind $w.bar.search <KeyRelease> {::xiaokai::drc::render}
+    pack $w.tabs -fill both -expand 1
+    pack $w.tabs.results.search -fill x
+    pack $w.bottom -in $w.tabs.results -side bottom -fill x
+    pack $w.list -in $w.tabs.results -fill both -expand 1
+    text $w.tabs.native.text -wrap word -font TkFixedFont -state disabled
+    pack $w.tabs.native.text -fill both -expand 1
+    settingsBuild
+    datasheetBuild
+    ttk::label $w.tabs.review.empty -text "先检查当前设计，再在此核对连接依据。"
+    pack $w.tabs.review.empty -anchor w
+    bind $w.tabs.results.search.entry <KeyRelease> {::xiaokai::drc::render}
     bind $w.list.tree <<TreeviewSelect>> {::xiaokai::drc::uiSelect}
     bind $w.list.tree <Double-Button-1> {::xiaokai::drc::uiDouble %x %y; break}
     bind $w.list.tree <Return> {::xiaokai::drc::uiLocate; break}
-    wm protocol $w WM_DELETE_WINDOW [list wm withdraw $w]
+    bind $w.tabs <<NotebookTabChanged>> ::xiaokai::drc::uiTabChanged
+    wm protocol $w WM_DELETE_WINDOW ::xiaokai::drc::uiHide
     detailText "选中问题查看中文说明；双击具体位置跳转。"
     watchFreshness
 }
@@ -126,7 +156,9 @@ proc ::xiaokai::drc::detailText {text} {
 }
 proc ::xiaokai::drc::uiCheck {} {
     variable busy; variable result; variable status; variable powerWhitelist; variable stale; variable completeStatus
-    if {$busy} {return}
+    if {$busy || $::xiaokai::drc::reviewWorking} {return}
+    aiCancel
+    reviewReset
     set result {}; set stale 0; set completeStatus ""; set status "正在保存并检查…"
     detailText "正在保存并检查当前设计，请稍候。"
     .xiaokaiDrc.bar.check configure -state disabled
@@ -154,6 +186,7 @@ proc ::xiaokai::drc::uiCheck {} {
         .xiaokaiDrc.bar.check configure -state normal
         render
         foreground
+        .xiaokaiDrc.tabs select .xiaokaiDrc.tabs.results
     }
 }
 proc ::xiaokai::drc::render {} {
@@ -223,30 +256,28 @@ proc ::xiaokai::drc::uiLocate {} {
     uiLocateRow [lindex $rows 0] $result
 }
 proc ::xiaokai::drc::uiLocateRow {row checkedResult} {
-    variable status; variable busy
+    variable status; variable busy; variable reviewVisible
     if {$busy} {return}
     if {![refreshFreshness $checkedResult]} {return}
     if {![canLocate $row]} {set status "无定位信息：请查看原生详细信息。"; return}
-    if {[catch {locate $row $checkedResult} msg]} {set status $msg} else {set status "已定位：[get $row hierarchy_path] · [get $row sheet_name]"}
+    if {[catch {locate $row $checkedResult} msg]} {set status $msg} else {
+        set status "已定位：[get $row hierarchy_path] · [get $row sheet_name]"
+        if {!$reviewVisible} {append status "；点击左上方“一键放置 Text”即可标注。"}
+    }
 }
 proc ::xiaokai::drc::uiNative {} {
     set rows [selectedRows]
     if {![llength $rows]} {return}
     set messages {}; foreach row $rows {lappend messages [get $row message]}
-    set w .xiaokaiDrcNative
-    catch {destroy $w}
-    toplevel $w; wm title $w "原生详细信息"; wm geometry $w 760x380
-    text $w.text -wrap word -font TkFixedFont
-    $w.text insert end [join $messages \n\n]
-    $w.text configure -state disabled
-    pack $w.text -fill both -expand 1
+    panelText .xiaokaiDrc.tabs.native.text [join $messages \n\n]
+    uiTab native
 }
 proc ::xiaokai::drc::uiExport {} {
     variable result; variable status
     if {![dict exists $result rows]} {return}
     if {![refreshFreshness $result]} {return}
-    set dir [tk_chooseDirectory -title "导出中文报告和 CSV"]
-    if {$dir eq ""} {return}
+    # A single click exports beside the design; the status shows the full path.
+    set dir [file dirname [dict get $result source]]
     if {[catch {
         set out [file join $dir drc_[clock format [clock seconds] -format %Y%m%d_%H%M%S]_[clock clicks]]
         set saved [writeReports $out [dict get $result rows] [dict get $result counts] [dict get $result waived]]

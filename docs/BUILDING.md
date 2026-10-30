@@ -5,7 +5,7 @@
 ## 环境
 
 - Windows 10 / 11、Windows PowerShell 5.1。
-- .NET Framework 4.x 自带 `csc.exe`，无需 Visual Studio。
+- .NET Framework 4.7.2 或更高版本，自带 `csc.exe`，无需 Visual Studio。
 - 完整发行构建使用 CPython 3.12 Windows 版，需含 tkinter / Tcl / Tk。
 - `requirements-build.txt` 固定打包工具与传递依赖版本。
 - 普通 Tcl 测试需 Tcl 8.6、tcltest 和 Tcllib 的 json 包；可使用 Capture 自带 `tcltk/bin/tclsh.exe`。运行主程序不要求 Python 或独立 Tcl。
@@ -26,7 +26,7 @@ python -m venv .venv
 powershell -NoProfile -File scripts/build-release.ps1 -Python .\.venv\Scripts\python.exe
 ```
 
-该脚本重新生成插件，构建规格生成器与 3D 下载器，收集 Python / Tcl / Tk / PyInstaller 许可，然后编译安装版与绿色版。输出在 `toolbox/dist/`；原始 EXE 不进入版本库。
+该脚本重新生成插件，构建规格生成器与 3D 下载器，收集 Python / Tcl / Tk / PyInstaller 许可，然后编译安装版与绿色版。输出在 `toolbox/dist/`；原始 EXE 不进入版本库。PDF 辅助程序使用固定且校验过的 DLL，来源与许可见 `toolbox/drc/vendor/README.md`；运行库随对应源码提供。Allegro 构建同时校验原件哈希、生成安装副本和辅助程序。完整发行脚本自动设置 `XIAOKAI_BUILD_PYTHON`，其他构建入口可自行设置该变量选择 Python。
 
 插件源码位置：立创转换在 `dev/`；BOM、DRC、文字前后缀分别在 `toolbox/bomtool`、`toolbox/drc`、`toolbox/textaffix`；Netlocator 与插件集合的源文件就是 `autoload/` 中的 Tcl 文件。文字前后缀的 EscapeWatcher.cs 会被编译并嵌入 Tcl。
 

@@ -1,0 +1,14 @@
+{
+  "Microsoft.Bcl.HashCode.dll": "76b1260ce747a317e9b514433b89a81b038411fcabddc6f9c7dbabb0742d8b81",
+  "System.Buffers.dll": "accccfbe45d9f08ffeed9916e37b33e98c65be012cfff6e7fa7b67210ce1fefb",
+  "System.Memory.dll": "bf3fb84664f4097f1a8a9bc71a51dcf8cf1a905d4080a4d290da1730866e856f",
+  "System.Numerics.Vectors.dll": "1d3ef8698281e7cf7371d1554afef5872b39f96c26da772210a33da041ba1183",
+  "System.Runtime.CompilerServices.Unsafe.dll": "66409f670315afe8610f17a4d3a1ee52d72b6a46c544cec97544e8385f90ad74",
+  "UglyToad.PdfPig.Core.dll": "8ebe1d608f4e981677ec5836eda897d1910b9b2a3a1bf280b2f573f77f26e977",
+  "UglyToad.PdfPig.dll": "b03f0d4694d31ab3b9ba079cb7c9dd4af178cb326120080da88db1623e5c236c",
+  "UglyToad.PdfPig.DocumentLayoutAnalysis.dll": "614d99392b54a4d54daffebcbf023d067adfa192f4b510d354d74ea77ef096fa",
+  "UglyToad.PdfPig.Fonts.dll": "6edba3b21699070a5f3b1117c7a66be842f010bb1f97ddc8313f5674b5476687",
+  "UglyToad.PdfPig.Package.dll": "7f4dfbf5f626728e7d1a9375adc6573687c4a2f7fcb205bfb9aa1fa544518aaf",
+  "UglyToad.PdfPig.Tokenization.dll": "6beb817263a4b5ae42f4f33f55c987bb7e510c1203f762bb54eb59d86b6bd578",
+  "UglyToad.PdfPig.Tokens.dll": "c7e0e9bcc0f0d00b96f1a649aa0c5472790b6d56d53d8590e9c7680f9167ff2d"
+}

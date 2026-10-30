@@ -1,0 +1,66 @@
+丝印	型号	类别	封装	厂商	参数/用途	备注	来源
+GA	GF1A-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 50V	GF1 系列；型号后缀和丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+GB	GF1B-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 100V	GF1 系列；型号后缀和丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+GD	GF1D-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 200V	包含型号 GF1D；丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+GG	GF1G-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 400V	包含型号 GF1G；丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+GJ	GF1J-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 600V	包含型号 GF1J；丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+GK	GF1K-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 800V	包含型号 GF1K；丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+GM	GF1M-E3	二极管 / 整流	SMA (DO-214AC)	Vishay	1A / 1000V	包含型号 GF1M；丝印对应关系待数据手册核对。	用户整理；待数据手册核对
+LB33A	RS3236-3.3YF5	电源 IC / LDO	SOT-23-5	润石 / RUNIC	输入最高 7.5V；输出 3.3V / 500mA；过温保护	用户另提供 L435D：可能为批次/追溯行，不能单独据此确认型号。	用户整理；待数据手册核对
+SL	B5819W	二极管 / 肖特基	SOD-123	长电长晶 / CJ	40V / 1A	丝印 SL；需结合厂商和封装核对。	用户整理；待数据手册核对
+2YL6	BL8572PRN | BL8572	电源 IC / DC-DC	SOT-23-5	待核对	电源管理 IC	2YL6 按用户提供的完整顶标收录；参数、固定码与批次码分界待核对。	用户整理；待数据手册核对
+1YC	L8050QLT1G	三极管 / NPN	SOT-23	LRC / 乐山无线电	25V / 800mA	按用户提供资料收录。	用户整理；待数据手册核对
+C3H	LIS3DHTR | LIS3DH	传感器 / 加速度	LGA-16 (3×3mm)	ST / 意法半导体	3 轴 MEMS 数字加速度传感器	用户描述为第 2 行 C3H；该行可能含追溯码，单凭 C3H 不能确认 LIS3DH。	用户整理；待数据手册核对
+1AM	MMBT3904LT1G	三极管 / NPN	SOT-23	onsemi / 安森美	40V / 200mA	按用户提供资料收录；尾部字符可能随批次变化。	用户整理；待数据手册核对
+R25	MMBTSC3356S	三极管 / NPN	SOT-23	待核对	12V / 100mA；高频三极管	按用户提供资料收录。	用户整理；待数据手册核对
+SR	BSS131 H6327	MOS 管 / N 沟道	SOT-23	Infineon / 英飞凌	240V / 110mA	按用户提供资料收录。	用户整理；待数据手册核对
+A4t	BAV70W	二极管 / 开关	SOT-323	待核对	双开关二极管；共阴极	与 BAV99W 分开收录；厂商不同可能采用不同顶标。	用户整理；待数据手册核对
+A7t	BAV99W	二极管 / 开关	SOT-323	待核对	双开关二极管；串联	与 BAV70W 分开收录；厂商不同可能采用不同顶标。	用户整理；待数据手册核对
+T4	1N4148	二极管 / 开关	SOD-123	待核对	小信号开关二极管	用户称 1206；此处以 SOD-123 为封装条件，1206 仅作原始描述，不能与贴片阻容封装等同。	用户整理；待数据手册核对
+5351	SI5351A-B-GTR	时钟 IC / 时钟发生器	MSOP-10	Silicon Labs / Skyworks	可编程时钟发生器	丝印 5351；后缀及具体配置需核对。	用户整理；待数据手册核对
+A09T	AO3400	MOS 管 / N 沟道	SOT-23	AOS / 万代	30V；N 沟道	按用户提供资料收录；不要与 AO3401 混用。	用户整理；待数据手册核对
+A19T	AO3401	MOS 管 / P 沟道	SOT-23	AOS / 万代	-30V；P 沟道	按用户提供资料收录；不要与 AO3400 混用。	用户整理；待数据手册核对
+WA	BZT52C6V2	二极管 / 稳压	SOD-123	待核对	稳压值 6.2V	用户称 1206；按器件封装 SOD-123 收录，功率依厂商规格核对。	用户整理；待数据手册核对
+AF	PESD24VL1BA,115	保护器件 / ESD	SOD-323	Nexperia / 安世	24V 系列；双向 ESD 保护	24V 为系列工作电压信息，不能当作钳位电压。	用户整理；待数据手册核对
+MR	SMBJ40A	保护器件 / TVS	SMB (DO-214AA)	待核对	反向工作电压 40V；单向	丝印 MR；击穿/钳位电压及厂商需另查规格书。	用户整理；待数据手册核对
+S1A	MMBT3904-R1	三极管 / NPN	SOT-23	待核对	40V / 200mA	同一丝印可对应其他厂商或其他器件，需结合封装判断。	用户整理；待数据手册核对
+KZ2	BZX84C5V1-13-F	二极管 / 稳压	SOT-23	Diodes	稳压值 5.1V	按用户提供资料收录。	用户整理；待数据手册核对
+S2A	MMBT3906-R1	三极管 / PNP	SOT-23	待核对	40V / 200mA（绝对值）	按用户提供资料收录。	用户整理；待数据手册核对
+K72	2N7002-7-F	MOS 管 / N 沟道	SOT-23	Diodes	60V；N 沟道小信号 MOS 管	厂商规格书明确 K72 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS11303 Rev.40-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/2N7002.pdf
+K27	2N7002KDW	MOS 管 / 双 N 沟道	SOT-363	待核对	双 N 沟道 MOS 管	注意与单管 2N7002 的封装和引脚区别。	用户整理；待数据手册核对
+Y1	SS8050	三极管 / NPN	SOT-23	待核对	25V / 1.5A（用户提供）	SS8050 不同厂商的电流额定值和顶标可能不同；使用前核对具体规格书。	用户整理；待数据手册核对
+R1	CJ3401	MOS 管 / P 沟道	SOT-23	长电长晶 / CJ	-30V / -4.2A	按用户提供资料收录；电流额定条件需核对。	用户整理；待数据手册核对
+BCJ	MBRM140T1G	二极管 / 肖特基	Powermite	onsemi / 安森美	40V / 1A	按用户提供资料收录。	用户整理；待数据手册核对
+SS14	SS14	二极管 / 肖特基	SMA (DO-214AC)	多厂商	40V / 1A	完整型号顶标；具体封装和参数以厂商资料为准。	用户整理；待数据手册核对
+SS24	SS24	二极管 / 肖特基	SMA (DO-214AC)	多厂商	40V / 2A	按用户给出的 SMA 收录；有厂商提供不同封装版本，需核对。	用户整理；待数据手册核对
+SS34	SS34	二极管 / 肖特基	SMA (DO-214AC)	多厂商	40V / 3A	按用户给出的 SMA 收录；有厂商提供不同封装版本，需核对。	用户整理；待数据手册核对
+A2	MMBD4148W	二极管 / 开关	SOD-123（用户提供）	待核对	小信号开关二极管	型号 MMBD4148W 与所述 SOD-123 封装组合待核对；可能与其他 4148 系列型号混淆。	用户整理；待数据手册核对
+1P	MMBT2222ALT1G | LMBT2222ALT1G	三极管 / NPN	SOT-23	onsemi / LRC（按型号区分）	NPN 通用三极管	两个厂商型号作为候选；额定参数以完整型号的规格书为准。	用户整理；待数据手册核对
+2F	LMBT2907ALT1G	三极管 / PNP	SOT-23	LRC / 乐山无线电	-60V / -600mA	按用户提供资料收录。	用户整理；待数据手册核对
+U3	D1213A-01WS-7	保护器件 / ESD	SOD-323	Diodes	ESD / 瞬态保护二极管	按用户提供资料收录；工作、击穿和钳位电压需查规格书。	用户整理；待数据手册核对
+K1N	MMBT3904-7-F | MMBT3904-13-F	三极管 / NPN	SOT-23	Diodes	40V / 200mA	厂商明确 K1N 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS30036 Rev.27-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/MMBT3904.pdf
+K3N	MMBT3906-7-F | MMBT3906-13-F	三极管 / PNP	SOT-23	Diodes	-40V / -200mA	厂商明确 K3N 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS30059 Rev.23-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/MMBT3906.pdf
+K1P	MMBT2222A-7-F | MMBT2222A-13-F	三极管 / NPN	SOT-23	Diodes	40V / 600mA	与其他厂商的 1P 码分开收录；YM 为日期码。	Diodes 官方数据手册 DS30041 Rev.18-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/MMBT2222A.pdf
+K2F	MMBT2907A-7-F | MMBT2907A-13-F	三极管 / PNP	SOT-23	Diodes	-60V / -600mA	与 LRC 的 2F 候选分开收录；YM 为日期码。	Diodes 官方数据手册 DS30040 Rev.21-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/MMBT2907A.pdf
+K2X	MMBT4401-7-F | MMBT4401-13-F	三极管 / NPN	SOT-23	Diodes	40V / 600mA	厂商明确 K2X 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS30039 Rev.20-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/MMBT4401.pdf
+K2T	MMBT4403-7-F | MMBT4403-13-F	三极管 / PNP	SOT-23	Diodes	-40V / -600mA	厂商明确 K2T 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS30058 Rev.15-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/MMBT4403.pdf
+KJE	BAV99	二极管 / 开关	SOT-23	Diodes	双开关二极管；串联	此为 SOT-23 的 BAV99；不能与 SOT-323 的 BAV99W 混同。	Diodes 官方数据手册 DS12007 Rev.29-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/BAV99.pdf
+JJ | KJJ	BAV70	二极管 / 开关	SOT-23	Diodes	双开关二极管；共阴极	厂商列明 JJ 或 KJJ 两种型号标识；YM 为日期码。	Diodes 官方数据手册 DS12006 Rev.25-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/BAV70.pdf
+KJG	BAV99W	二极管 / 开关	SOT-323	Diodes	双开关二极管；串联	Diodes 版本明确使用 KJG 顶标；用户提供的 A7t 为另一候选记录。	Diodes 官方数据手册 DS30045 Rev.14-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/BAV99W.pdf
+K38	BSS138-7-F | BSS138-13-F	MOS 管 / N 沟道	SOT-23	Diodes	50V；小信号 N 沟道 MOS 管	厂商明确 K38 为型号标识；YM 为日期码；电流需按散热条件核对。	Diodes 官方数据手册 DS30144 Rev.25-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/BSS138.pdf
+K84	BSS84-7-F | BSS84-13-F	MOS 管 / P 沟道	SOT-23	Diodes	-50V；小信号 P 沟道 MOS 管	厂商明确 K84 为型号标识；YM 为日期码；电流需按散热条件核对。	Diodes 官方数据手册 DS30149 Rev.27-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/BSS84.pdf
+23P	DMP2305U-7 | DMP2305U	MOS 管 / P 沟道	SOT-23	Diodes	-20V；P 沟道 MOS 管	厂商明确 23P 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS31737 Rev.8-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/DMP2305U.pdf
+22K	DMG2302UK-7 | DMG2302UK-13	MOS 管 / N 沟道	SOT-23	Diodes	20V；N 沟道；栅极 ESD 保护	厂商明确 22K 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS38439 Rev.2-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/DMG2302UK.pdf
+23X	DMG2305UX-7 | DMG2305UX-13	MOS 管 / P 沟道	SOT-23	Diodes	-20V；P 沟道 MOS 管	厂商明确 23X 为型号标识；YM 为日期码。	Diodes 官方数据手册 DS36196 Rev.8-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/DMG2305UX.pdf
+G3L	AP2112K-1.2TRG1	电源 IC / LDO	SOT-23-5 (SOT25)	Diodes	输出 1.2V / 600mA；带使能	同系列不同输出电压使用不同丝印；SOT25 为该厂商的 SOT-23-5 命名。	Diodes 官方数据手册 DS39724 Rev.2-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AP2112.pdf
+G3M	AP2112K-1.8TRG1	电源 IC / LDO	SOT-23-5 (SOT25)	Diodes	输出 1.8V / 600mA；带使能	同系列不同输出电压使用不同丝印；SOT25 为该厂商的 SOT-23-5 命名。	Diodes 官方数据手册 DS39724 Rev.2-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AP2112.pdf
+G3N	AP2112K-2.5TRG1	电源 IC / LDO	SOT-23-5 (SOT25)	Diodes	输出 2.5V / 600mA；带使能	同系列不同输出电压使用不同丝印；SOT25 为该厂商的 SOT-23-5 命名。	Diodes 官方数据手册 DS39724 Rev.2-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AP2112.pdf
+G5N	AP2112K-2.6TRG1	电源 IC / LDO	SOT-23-5 (SOT25)	Diodes	输出 2.6V / 600mA；带使能	同系列不同输出电压使用不同丝印；SOT25 为该厂商的 SOT-23-5 命名。	Diodes 官方数据手册 DS39724 Rev.2-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AP2112.pdf
+G3P	AP2112K-3.3TRG1	电源 IC / LDO	SOT-23-5 (SOT25)	Diodes	输出 3.3V / 600mA；带使能	同系列不同输出电压使用不同丝印；SOT25 为该厂商的 SOT-23-5 命名。	Diodes 官方数据手册 DS39724 Rev.2-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AP2112.pdf
+GH15B	AZ1117CH-ADJTRG1	电源 IC / LDO	SOT-223	Diodes	可调输出；限流与过温保护	H 封装版本；不同输出电压和封装后缀不能只凭 1117 字样替换。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf
+GH16B	AZ1117CH-1.2TRG1	电源 IC / LDO	SOT-223	Diodes	输出 1.2V；限流与过温保护	H 封装版本；固定电压顶标需完整核对。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf
+GH15C	AZ1117CH-1.5TRG1	电源 IC / LDO	SOT-223	Diodes	输出 1.5V；限流与过温保护	H 封装版本；固定电压顶标需完整核对。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf
+GH16C	AZ1117CH-1.8TRG1	电源 IC / LDO	SOT-223	Diodes	输出 1.8V；限流与过温保护	H 封装版本；固定电压顶标需完整核对。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf
+GH15D	AZ1117CH-2.5TRG1	电源 IC / LDO	SOT-223	Diodes	输出 2.5V；限流与过温保护	H 封装版本；固定电压顶标需完整核对。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf
+GH16D	AZ1117CH-3.3TRG1	电源 IC / LDO	SOT-223	Diodes	输出 3.3V；限流与过温保护	H 封装版本；固定电压顶标需完整核对。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf
+GH15E	AZ1117CH-5.0TRG1	电源 IC / LDO	SOT-223	Diodes	输出 5.0V；限流与过温保护	H 封装版本；固定电压顶标需完整核对。	Diodes 官方数据手册 DS36676 Rev.5-2；已核对 2026-10-28；https://www.diodes.com/assets/Datasheets/AZ1117C.pdf

@@ -92,6 +92,7 @@ namespace CadenceToolbox
                 "sum=" + sum + " total=" + Manifest.Tools.Count);
 
             TestCapturePluginStatus();
+            TestAllegroSkillStatus();
 
             // 逐个工具报告
             Console.WriteLine("\nper-tool resolution");
@@ -354,6 +355,11 @@ namespace CadenceToolbox
             Check("Capture插件不再提供独立安装或卸载入口",
                 !hasPluginTile, "tools.ini 仍包含独立插件条目");
 
+            Tool lookup = Find("常见丝印反查 v1.0");
+            Check("丝印反查可从其他辅助工具启动", lookup != null && lookup.Mine
+                && lookup.Category == "其他辅助工具" && lookup.Exists && !lookup.HasUninstaller,
+                lookup == null ? "没找到" : lookup.Exe);
+
             Tool gen = Find("元器件规格描述生成器 v1.0");
             Check("元器件规格描述生成器在清单里", gen != null, "没找到");
             Check("元器件规格描述生成器标为自研", gen != null && gen.Mine,
@@ -491,6 +497,53 @@ namespace CadenceToolbox
             return null;
         }
 
+        static void TestAllegroSkillStatus()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "xkt-skill-status-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                foreach (string name in XiaokaiAllegro.SkillFiles.Names)
+                    File.WriteAllText(Path.Combine(dir, name), "");
+                Check("SKILL files without startup are not installed", AllegroSkillStatus.InstalledPluginsIn(dir).Count == 0, "");
+                var init = new System.Text.StringBuilder("; BEGIN XIAOKAI ALLEGRO SELECTED TOOLS\n");
+                foreach (string name in XiaokaiAllegro.SkillFiles.Names)
+                    if (name.EndsWith(".il")) init.Append("load(\"C:/test/").Append(name)
+                        .Append(name == "x_silk_in_out.il" ? "\" \"deargds\")\n" : "\")\n");
+                init.Append("; END XIAOKAI ALLEGRO SELECTED TOOLS\n");
+                File.WriteAllText(Path.Combine(dir, "allegro.ilinit"), init.ToString());
+                var plugins = AllegroSkillStatus.InstalledPluginsIn(dir);
+                Check("Allegro SKILL includes A1-A9 and selected B tools", plugins.Count == 21
+                    && plugins[0].File == "Find_Component.il" && plugins[7].File == "show_height.il"
+                    && plugins[8].File == "Auto_artwork.il" && plugins[9].File == "x_change_via_net.il"
+                    && plugins[10].File == "xiaokaiDanglings.il", "");
+                Check("SKILL descriptions include usage and installed path", plugins.Count == 21
+                    && plugins[0].Host == "Allegro" && plugins[0].Usage.Contains("Alt+K")
+                    && plugins[0].Directory == dir && plugins[9].Usage.Contains("cvia"), "");
+                Check("View tools retain A1-A8 numbering", plugins.GetRange(0, 8).TrueForAll(
+                    delegate(CapturePluginStatus.PluginInfo p) { return p.Name.StartsWith("A") && p.Usage.Contains("Alt+K"); }), "");
+                Check("A6 uses list implementation", plugins[5].File == "highlight_padstack.il", "");
+                Check("Renumbered text tools retain enhanced overlap check and omit retired scripts", plugins.Exists(
+                    delegate(CapturePluginStatus.PluginInfo p) { return p.File == "gxl_wdzcheck_text_overlap.il"; })
+                    && !plugins.Exists(delegate(CapturePluginStatus.PluginInfo p) { return p.File == "check_dir.il" || p.File == "text_rotate.il" || p.File == "quick_textset.il"; }), "");
+                Check("B2 silk import/export startup supports password", plugins.Exists(
+                    delegate(CapturePluginStatus.PluginInfo p) { return p.File == "x_silk_in_out.il" && p.Usage.Contains("xk_silk_io"); }), "");
+                Check("Check description excludes net editing", plugins.Count == 21
+                    && !plugins[10].Usage.Contains("cvia"), "");
+                File.Delete(Path.Combine(dir, "Quick_ColorS.il"));
+                plugins = AllegroSkillStatus.InstalledPluginsIn(dir);
+                Check("Incomplete combined tool is not listed", plugins.Count == 20
+                    && !plugins.Exists(delegate(CapturePluginStatus.PluginInfo p) { return p.File == "Auto_artwork.il"; }), "");
+                File.Delete(Path.Combine(dir, "xiaokaiDanglings.il"));
+                plugins = AllegroSkillStatus.InstalledPluginsIn(dir);
+                Check("Via net editor does not depend on Check", plugins.Count == 19
+                    && plugins[8].File == "x_change_via_net.il", "");
+                File.Delete(Path.Combine(dir, "xiaokaiAllegroMenu.il"));
+                Check("Missing SKILL toolbox entry is not installed", AllegroSkillStatus.InstalledPluginsIn(dir).Count == 0, "");
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
         static void TestCapturePluginStatus()
         {
             Console.WriteLine("\nCapture 插件状态检测");
@@ -505,9 +558,9 @@ namespace CadenceToolbox
                 var installed = CapturePluginStatus.InstalledPluginsIn(dir);
                 Check("显示已安装的 Capture 插件",
                     installed.Count == 3
-                        && installed[0].Name == "立创 EDA 转 OrCAD"
-                        && installed[1].Name == "BOM 整理工具"
-                        && installed[2].Name == "Netlocator"
+                        && installed[0].Name == "Orcad内直接放置立创元件"
+                        && installed[1].Name == "BOM输出增强版"
+                        && installed[2].Name == "Signal一键全网络高亮"
                         && installed[0].Description.Length > 0
                         && installed[1].Description.Length > 0
                         && installed[2].Description.Length > 0,

@@ -46,3 +46,9 @@
 - Cadence、OrCAD、Allegro 等名称和商标属于各自权利人，本项目与其不存在官方隶属关系。
 - 立创 / 嘉立创在线接口与下载内容受其各自条款约束；下载的器件数据、3D 模型和用户工程不是本项目 GPL 授权的对象。
 - 开发机上的参考仓库 `OpenOrCadParser` 没有作为依赖或源码复制到本仓库；用户工程、旧安装包、缓存和原始规格表也未纳入。
+
+## Allegro SKILL 与 PDF 解析
+
+`toolbox/allegro/originals/` 保留用户提供的 SKILL 原始文件与校验值，安装副本和适配器在 `skill/`、`src/`；原作者署名与注释保留。加密脚本保持原字节。本项目 GPL 声明不替代这些第三方脚本本身的权利声明。
+
+PDF 解析使用 PdfPig 0.1.9（Apache-2.0）和 Microsoft .NET 兼容库。固定版本、来源与 SHA-256 见 `toolbox/drc/vendor/README.md`、`runtime-sha256.json`；完整许可与上游声明见同目录 `THIRD-PARTY-NOTICES.txt`，随源码和运行包提供，且嵌入辅助程序。用户下载的规格书不会随本项目发布。

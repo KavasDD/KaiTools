@@ -7,7 +7,7 @@
 在 Capture 的 Command Window 执行：
 
 ```tcl
-source {C:/path/to/XKGJX/autoload/bomtoolMenu.tcl}
+source {D:/selfsoftware/autoload/bomtoolMenu.tcl}
 bomtool::dialog
 ```
 

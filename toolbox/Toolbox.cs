@@ -25,13 +25,14 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
+using XiaokaiAppearance;
 
 // 版本号写进 exe 的资源里,不只是界面上那行字。安装脚本靠读它来判断机器上
 // 装的是哪一版("replacing version X with Y"),不写这个属性的话 csc 会填
 // 0.0.0.0,那句话就永远是错的。两处必须一致,自检里有一条在盯这个
 // (MainForm.Version 对 AssemblyVersion)。
-[assembly: System.Reflection.AssemblyFileVersion("1.6.47.0")]
-[assembly: System.Reflection.AssemblyVersion("1.6.47.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.6.88.0")]
+[assembly: System.Reflection.AssemblyVersion("1.6.88.0")]
 [assembly: System.Reflection.AssemblyTitle("小开工具箱")]
 
 namespace CadenceToolbox
@@ -627,8 +628,7 @@ namespace CadenceToolbox
 
         static bool LooksLikeCadenceRoot(string p)
         {
-            // Directory names and empty tools/bin trees also survive uninstall.
-            // Require a real product marker for manual and fallback detection.
+            // Use the same real-product check as the current open-source tree.
             return Ok(p);
         }
 
@@ -1204,17 +1204,94 @@ namespace CadenceToolbox
 
     static class Theme
     {
-        public static readonly Color SideBg     = Color.FromArgb(0x1B, 0x5E, 0x8C);
-        public static readonly Color SideSel    = Color.FromArgb(0x14, 0x47, 0x6B);
-        public static readonly Color SideHot    = Color.FromArgb(0x22, 0x6E, 0xA1);
-        public static readonly Color SideText   = Color.FromArgb(0xE8, 0xF2, 0xF8);
-        public static readonly Color HeadBg     = Color.FromArgb(0x15, 0x50, 0x7A);
-        public static readonly Color GridBg     = Color.FromArgb(0x2E, 0x8B, 0xB8);
-        public static readonly Color HintBg     = Color.FromArgb(0x3E, 0x9E, 0xCB);
-        public static readonly Color FootBg     = Color.FromArgb(0x14, 0x47, 0x6B);
+        public static Skin Current = Skins.Selected("toolbox");
+        public static Color SideBg { get { return Current.Surface; } }
+        public static Color SideSel { get { return Current.Header; } }
+        public static Color SideHot { get { return Current.Border; } }
+        public static Color SideText { get { return Current.Text; } }
+        public static Color HeadBg { get { return Current.Header; } }
+        public static Color GridBg { get { return Current.Background; } }
+        public static Color HintBg { get { return Current.Header; } }
+        public static Color FootBg { get { return Current.Surface; } }
         // 底部说明区。比网格深一档 —— 它是"读"的地方,不是"点"的地方,
         // 颜色一样的话会让人以为下面还有图标只是没加载出来。
-        public static readonly Color HelpBg     = Color.FromArgb(0x19, 0x55, 0x80);
+        public static Color HelpBg { get { return Current.Surface; } }
+    }
+
+    static class WindowBackdrop
+    {
+        public static void Paint(Control control, PaintEventArgs e)
+        {
+            Form owner = control.FindForm();
+            Image canvas = owner == null ? null : owner.BackgroundImage;
+            if (canvas == null) { e.Graphics.Clear(control.BackColor); return; }
+            Point origin = owner.PointToClient(control.PointToScreen(Point.Empty));
+            Rectangle clip = Rectangle.Intersect(control.ClientRectangle, e.ClipRectangle);
+            if (clip.Width < 1 || clip.Height < 1) return;
+            var source = new Rectangle(origin.X + clip.X, origin.Y + clip.Y, clip.Width, clip.Height);
+            e.Graphics.DrawImage(canvas, clip, source, GraphicsUnit.Pixel);
+        }
+    }
+
+    sealed class BackdropPanel : Panel
+    {
+        public BackdropPanel() { DoubleBuffered = true; }
+        protected override void OnPaintBackground(PaintEventArgs e) { WindowBackdrop.Paint(this, e); }
+    }
+
+    sealed class BackdropLabel : Label
+    {
+        protected override void OnPaintBackground(PaintEventArgs e) { WindowBackdrop.Paint(this, e); }
+    }
+
+    // Draw caption symbols as geometry so their size and alignment do not
+    // depend on the selected font's dash and multiplication glyphs.
+    sealed class CaptionButton : Button
+    {
+        readonly bool mClose;
+        bool mHot, mPressed;
+        public CaptionButton(bool close)
+        {
+            mClose = close;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
+            BackColor = Theme.HintBg; ForeColor = Theme.SideText;
+            Size = new Size(44, 34); TabStop = false;
+            AccessibleName = close ? "关闭" : "最小化";
+            AccessibleRole = AccessibleRole.PushButton;
+        }
+        protected override void OnMouseEnter(EventArgs e) { mHot = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { mHot = false; mPressed = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { mPressed = e.Button == MouseButtons.Left; Invalidate(); base.OnMouseDown(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { mPressed = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(BackColor);
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            if (mHot) {
+                Color fill = mClose ? Color.FromArgb(mPressed ? 190 : 224, 57, 70)
+                    : Color.FromArgb(mPressed ? 48 : 28, ForeColor);
+                var box = new RectangleF(3, 4, Width - 6, Height - 8);
+                using (var path = new System.Drawing.Drawing2D.GraphicsPath()) {
+                    const float diameter = 8;
+                    path.AddArc(box.Left, box.Top, diameter, diameter, 180, 90);
+                    path.AddArc(box.Right - diameter, box.Top, diameter, diameter, 270, 90);
+                    path.AddArc(box.Right - diameter, box.Bottom - diameter, diameter, diameter, 0, 90);
+                    path.AddArc(box.Left, box.Bottom - diameter, diameter, diameter, 90, 90);
+                    path.CloseFigure();
+                    using (var brush = new SolidBrush(fill)) e.Graphics.FillPath(brush, path);
+                }
+            }
+            float cx = Width / 2f, cy = Height / 2f;
+            using (var pen = new Pen(mClose && mHot ? Color.White : ForeColor, 1.6f)) {
+                pen.StartCap = pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                if (mClose) {
+                    e.Graphics.DrawLine(pen, cx - 5, cy - 5, cx + 5, cy + 5);
+                    e.Graphics.DrawLine(pen, cx + 5, cy - 5, cx - 5, cy + 5);
+                } else e.Graphics.DrawLine(pen, cx - 6, cy, cx + 6, cy);
+            }
+        }
     }
 
     // 只为了一件事存在:把图标间距调宽。LargeIcon 视图的默认格子宽度容不下
@@ -1226,6 +1303,84 @@ namespace CadenceToolbox
     // 句柄,间距会跟着被重置回默认值。
     class IconGrid : ListView
     {
+        public bool CompactRows;
+        public IconGrid()
+        {
+            OwnerDraw = false;
+            DrawItem += delegate(object sender, DrawListViewItemEventArgs e) { if (View != View.Details) e.DrawDefault = true; };
+            DrawSubItem += DrawCompactRow;
+            ColumnWidthChanging += delegate(object sender, ColumnWidthChangingEventArgs e) {
+                e.Cancel = true; e.NewWidth = Math.Max(20, ClientSize.Width - 4);
+            };
+        }
+        protected override void OnClientSizeChanged(EventArgs e)
+        {
+            base.OnClientSizeChanged(e);
+            if (View == View.Details && Columns.Count > 0) Columns[0].Width = Math.Max(20, ClientSize.Width - 4);
+        }
+        void DrawCompactRow(object sender, DrawListViewSubItemEventArgs e)
+        {
+            if (View != View.Details) { e.DrawDefault = true; return; }
+            Form owner = FindForm();
+            if (owner != null && owner.BackgroundImage != null) {
+                Point origin = owner.PointToClient(PointToScreen(e.Bounds.Location));
+                e.Graphics.DrawImage(owner.BackgroundImage, e.Bounds,
+                    new Rectangle(origin, e.Bounds.Size), GraphicsUnit.Pixel);
+            } else using (var brush = new SolidBrush(BackColor)) e.Graphics.FillRectangle(brush, e.Bounds);
+            bool heading = e.Item.Tag is PluginSection;
+            if (!heading && e.Item.Selected) using (var brush = new SolidBrush(Theme.SideSel))
+                e.Graphics.FillRectangle(brush, e.Bounds);
+            Rectangle text = new Rectangle(e.Bounds.X + 12, e.Bounds.Y, Math.Max(1, e.Bounds.Width - 24), e.Bounds.Height);
+            if (CompactRows && !heading) { text.X += 20; text.Width -= 20; }
+            int imageIndex = SmallImageList == null ? -1 : SmallImageList.Images.IndexOfKey(e.Item.ImageKey);
+            if (!heading && !CompactRows && imageIndex >= 0) {
+                SmallImageList.Draw(e.Graphics, text.X, e.Bounds.Y + (e.Bounds.Height - 16) / 2, 16, 16, imageIndex);
+                text.X += 24; text.Width -= 24;
+            }
+            TextRenderer.DrawText(e.Graphics, e.Item.Text, Font, text,
+                heading ? Theme.Current.Accent : ForeColor,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+        public void UseRows(bool compact)
+        {
+            CompactRows = compact; View = View.Details; OwnerDraw = true; HeaderStyle = ColumnHeaderStyle.None;
+            FullRowSelect = true; ShowItemToolTips = true; LabelWrap = false;
+            if (Columns.Count == 0) Columns.Add("名称", Math.Max(20, ClientSize.Width - 4));
+        }
+        public void UseIcons()
+        {
+            OwnerDraw = false; CompactRows = false; LabelWrap = true;
+            FullRowSelect = false; View = View.LargeIcon;
+            if (IsHandleCreated) ApplyIconSpacing();
+        }
+        Image mCanvas;
+        Rectangle mArtworkBounds;
+        // Native ListView cannot be transparent. Copy its exact part of the
+        // window canvas without rescaling or restarting the artwork per section.
+        public void ApplyBackdrop(Control owner, Image canvas)
+        {
+            if (!Visible || ClientSize.Width < 1 || ClientSize.Height < 1) return;
+            var bounds = new Rectangle(owner.PointToClient(PointToScreen(Point.Empty)), ClientSize);
+            if (mCanvas == canvas && mArtworkBounds == bounds) return;
+            var crop = new Bitmap(ClientSize.Width, ClientSize.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (Graphics graphics = Graphics.FromImage(crop)) {
+                graphics.Clear(BackColor);
+                graphics.DrawImage(canvas, ClientRectangle, bounds, GraphicsUnit.Pixel);
+            }
+            Image previous = BackgroundImage;
+            // The native image starts inside a narrow ListView inset. Match
+            // its fill to the local canvas instead of exposing a dark strip.
+            BackColor = crop.GetPixel(0, crop.Height / 2);
+            BackgroundImage = crop;
+            BackgroundImageTiled = false;
+            mCanvas = canvas; mArtworkBounds = bounds;
+            if (previous != null) previous.Dispose();
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && BackgroundImage != null) { Image image = BackgroundImage; BackgroundImage = null; image.Dispose(); }
+            base.Dispose(disposing);
+        }
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wp, IntPtr lp);
 
@@ -1238,11 +1393,16 @@ namespace CadenceToolbox
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
+            mCanvas = null;
             // ListView 是原生 Win32 控件，WinForms 的普通双缓冲对它不生效。
             // 打开文件对话框时主窗体会失去/恢复焦点，原生控件会重画选中项；
             // LVS_EX_DOUBLEBUFFER 避免图标在这次重画中短暂消失。
             SendMessage(Handle, LVM_SETEXTENDEDLISTVIEWSTYLE,
                 (IntPtr)LVS_EX_DOUBLEBUFFER, (IntPtr)LVS_EX_DOUBLEBUFFER);
+            ApplyIconSpacing();
+        }
+        void ApplyIconSpacing()
+        {
             SendMessage(Handle, LVM_SETICONSPACING, IntPtr.Zero,
                 (IntPtr)((Spacing.Height << 16) | (Spacing.Width & 0xFFFF)));
         }
@@ -1261,25 +1421,29 @@ namespace CadenceToolbox
             public readonly string Name;
             public readonly string File;
             public readonly string Description;
+            public readonly string Host, Usage, Directory;
 
-            public PluginInfo(string name, string file, string description)
+            public PluginInfo(string name, string file, string description, string host = "Capture", string usage = null, string directory = null)
             {
                 Name = name;
                 File = file;
                 Description = description;
+                Host = host;
+                Usage = usage ?? "在 Capture 原理图中按 Alt+K 打开插件功能集合。";
+                Directory = directory;
             }
         }
 
         static readonly PluginInfo[] sPlugins = {
-            new PluginInfo("立创 EDA 转 OrCAD", "lceda2orcadMenu.tcl",
+            new PluginInfo("Orcad内直接放置立创元件", "lceda2orcadMenu.tcl",
                 "剪贴板添加器件；按编号添加器件；列出缓存器件；清除生成的 OLB（保留器件缓存）。"),
-            new PluginInfo("BOM 整理工具", "bomtoolMenu.tcl",
+            new PluginInfo("BOM输出增强版", "bomtoolMenu.tcl",
                 "读取当前原理图，自动生成并整理 BOM Excel 工作簿。"),
-            new PluginInfo("Netlocator", "netlocatorMenu.tcl",
+            new PluginInfo("Signal一键全网络高亮", "netlocatorMenu.tcl",
                 "跨页定位并高亮网络（Alt+F2）；选择当前页整网（Alt+F3）；显示选中网络名称。"),
             new PluginInfo("DRC中文增强版", "drctoolMenu.tcl",
                 "双击检查当前设计及 PCB 网表，忽略引脚电气类型冲突；中文归纳问题、双击定位，报告按需导出。"),
-            new PluginInfo("文字前后缀", "textaffixMenu.tcl",
+            new PluginInfo("任意位置批量前/后添加文字", "textaffixMenu.tcl",
                 "设置添加文字和前后位置，单击或框选即可处理；已有相同前缀／后缀时可去掉，默认连续处理，Esc 停止并关闭。")
         };
 
@@ -1303,7 +1467,6 @@ namespace CadenceToolbox
             {
                 paths.Add(Path.GetFullPath(AutoLoadPath(path)));
                 paths.Add(Path.GetFullPath(AutoLoadPath(Path.Combine(path, "SPB_Data"))));
-                paths.Add(Path.GetFullPath(Path.Combine(path, "tools", "capture", "tclscripts", "capAutoLoad")));
                 if (name.Equals("SPB_Data", StringComparison.OrdinalIgnoreCase))
                     paths.Add(Path.GetFullPath(AutoLoadPath(Path.GetDirectoryName(path) ?? "")));
                 if (name.StartsWith("SPB_", StringComparison.OrdinalIgnoreCase))
@@ -1315,10 +1478,8 @@ namespace CadenceToolbox
         static List<string> FindAutoLoadPaths()
         {
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\XiaokaiToolbox"))
-                if (key != null) AddDirectory(paths, key.GetValue("CaptureAutoLoad") as string);
             foreach (string name in new[] {
-                "XIAOKAI_CAPTURE_AUTOLOAD", "HOME", "USERPROFILE", "CDS_INST_DIR", "SPB_17_4",
+                "HOME", "USERPROFILE", "CDS_INST_DIR", "SPB_17_4",
                 "SPB_17_2", "SPB_16_6", "CDSROOT"
             })
             {
@@ -1374,6 +1535,89 @@ namespace CadenceToolbox
         }
     }
 
+    static class AllegroSkillStatus
+    {
+        public static List<CapturePluginStatus.PluginInfo> InstalledPluginsIn(string pcbEnv)
+        {
+            var result = new List<CapturePluginStatus.PluginInfo>();
+            string[] common = { "xiaokaiAllegroMenu.il", "xiaokaiAllegroHotkey.exe" };
+            if (!XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, common)) return result;
+            string[,] viewTools = {
+                { "A1：元件列表与定位", "Find_Component.il", "find component", "Ctrl+F 打开；输入位号片段立即筛选；选择元件后显示其所在面的丝印、引脚、过孔与走线并定位。" },
+                { "A2：现有 DRC 浏览与定位", "Find_DRC.il", "find drc", "按类别、层和类型筛选已有 DRC，单击定位；可标记暂不关注的类型并恢复显示。" },
+                { "A3：快速切换格点", "quick_grids.il", "quick_grids", "点击 mil 或 mm 预设值，修改设计格点。" },
+                { "A4：快速切换层显示", "quick_display.il", "quick_display", "十个自定义显示配置，默认 P1～P10，可修改名称、保存和读取；统一行距、中文界面。ssq 完整版、sq 迷你版。" },
+                { "A5：mm／mil 单位换算", "conv.il", "conv", "输入 mm 或 mil，显示对应单位数值。" },
+                { "A6：焊盘与孔径高亮", "highlight_padstack.il", "hps", "列表版，可缩放窗口；选择焊盘或孔径高亮对应引脚、过孔，相关层需可见。" },
+                { "A7：修改库路径", "show_library.il", "xk_library_paths", "选择或填写 PSMPATH、PADPATH、DEVPATH，保存后立即生效。" },
+                { "A8：生成元件高度文字", "show_height.il", "show_height", "独立读取元件 PCB 封装高度属性，生成 HEIGHT_TEXT_TOP／BOTTOM 文字；重复运行重建这两层文字，无需原理图工具。" }
+            };
+            for (int i = 0; i < viewTools.GetLength(0); i++)
+                if (XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, viewTools[i, 1]))
+                    result.Add(new CapturePluginStatus.PluginInfo(viewTools[i, 0], viewTools[i, 1],
+                        "查看类：" + viewTools[i, 3], "Allegro",
+                        "在 Allegro 板图中按 Alt+K → 查看类 → " + viewTools[i, 0]
+                        + "，双击工具名运行，或输入 " + viewTools[i, 2] + "。", pcbEnv));
+            if (XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, "Auto_artwork.il", "Quick_ColorS.il", "film_reorder.il"))
+                result.Add(new CapturePluginStatus.PluginInfo("A9：一键设置光绘与层叠颜色", "Auto_artwork.il",
+                    "查看类：组合原版自动光绘、层叠颜色与 Film 排序设置，依次完成光绘和配色，按铜层及生产辅助层排列 View；输出前请检查 Artwork。",
+                    "Allegro", "在 Allegro 板图中按 Alt+K → 查看类 → 一键设置光绘与层叠颜色。执行后保存 BRD，板图设置才会保留。", pcbEnv));
+            if (XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, "x_change_via_net.il"))
+                result.Add(new CapturePluginStatus.PluginInfo("C1：过孔修改网络", "x_change_via_net.il",
+                    "过孔与走线修改类：原版 cvia，框选过孔后修改网络；固定过孔跳过并记入日志。",
+                    "Allegro", "在 Allegro 板图中按 Alt+K → 过孔与走线修改 → 过孔修改网络（或输入 cvia）。框选需要修改的过孔，右键 Done，再在网络列表中选择目标网络。", pcbEnv));
+            if (XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, "xiaokaiDanglings.il"))
+            {
+                result.Add(new CapturePluginStatus.PluginInfo("D1：悬空线／过孔／孤岛检查与处理", "xiaokaiDanglings.il",
+                    "检查类：三页列出悬空线、悬空过孔和孤岛，支持多选、定位、刷新和删除。",
+                    "Allegro", "在 Allegro 板图中按 Alt+K → 检查类 → 悬空线／过孔／孤岛检查与处理。选中结果可定位或删除，点击右上角 × 关闭。", pcbEnv));
+            }
+            string[,] designCheckTools = {
+                { "D2：未扇出 SMD 引脚检查", "lgs_hilight_no_fanout.il", "hl_nf", "检查类", "选择顶层或底层，检查未扇出的 SMD 引脚并逐项定位。" },
+                { "D3：焊盘与走线间距检查", "lgs_check_solder_to_line_V1_0.il", "solder2line check", "检查类", "保留原版矩形焊盘检查算法；按当前设计单位填写间距，检查顶层或底层并定位。" },
+                { "D4：SMD 与通孔引脚间距检查", "quick_chSmd2ThrP.il", "quick_smd2thrp", "检查类", "检查 SMD 元件与对面通孔引脚的间距，支持前后定位；默认 120 mil。" },
+                { "D5：缺少锡膏开窗检查", "find_pin_no_past.il", "find_pin_no_past", "检查类", "原版加密脚本，生成缺少锡膏开窗的引脚报告。" },
+                { "D6：缺少阻焊开窗检查", "find_pin_no_solder.il", "find_pin_no_solder", "检查类", "原版加密脚本，生成缺少阻焊开窗的引脚报告。" },
+            };
+            for (int i = 0; i < designCheckTools.GetLength(0); i++)
+                if (XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, designCheckTools[i, 1]))
+                    result.Add(new CapturePluginStatus.PluginInfo(designCheckTools[i, 0], designCheckTools[i, 1],
+                        "检查类：" + designCheckTools[i, 4], "Allegro",
+                        "在 Allegro 中按 Alt+K → 检查类 → " + designCheckTools[i, 0]
+                        + "，双击运行；或输入 " + designCheckTools[i, 2] + "。", pcbEnv));
+            string[,] textAndCheckTools = {
+                { "B1：文字调整与居中", "fTextTuneTools.il", "tt", "丝印与文字整理", "框选或点选元件，调整文字居中、方向、字号；原窗口默认装配层，需要丝印时选择 Silkscreen。" },
+                { "D7：缺失丝印位号检查", "check_no_refdes.il", "Check_No_Refdes", "检查类", "运行后直接显示并高亮缺少丝印位号的元件，自动打开检查报告；结果保留在 no_refdes.log。" },
+                { "D8：丝印重叠检查（增强版）", "gxl_wdzcheck_text_overlap.il", "ch_text_overlap", "检查类", "选择顶层或底层及检查项目，检查后用前后按钮定位；间距使用当前设计单位。" },
+                { "D9：丝印位号交叉检查", "jkcheck_refdes_cross.il", "ch_cross", "检查类", "检查交叉位号，在 MANUFACTURING/REFDES TOP DRC、BOTTOM DRC 层生成标记。" },
+                { "B2：丝印导出与导入", "x_silk_in_out.il", "xk_silk_io", "丝印与文字整理", "先框选元件或丝印元素，点击导出后选择保存路径；仅导出选中范围。原版导入会解除固定并替换文件所列层全部丝印。" }
+            };
+            for (int i = 0; i < textAndCheckTools.GetLength(0); i++)
+                if (XiaokaiAllegro.SkillFiles.Enabled(pcbEnv, textAndCheckTools[i, 1], "xiaokaiTextTools.il"))
+                    result.Add(new CapturePluginStatus.PluginInfo(textAndCheckTools[i, 0], textAndCheckTools[i, 1],
+                        textAndCheckTools[i, 3] + "：" + textAndCheckTools[i, 4], "Allegro",
+                        "在 Allegro 中按 Alt+K → " + textAndCheckTools[i, 3] + " → " + textAndCheckTools[i, 0]
+                        + "，双击工具名运行，或输入 " + textAndCheckTools[i, 2] + "。", pcbEnv));
+            return result;
+        }
+
+        public static List<CapturePluginStatus.PluginInfo> InstalledPlugins()
+        {
+            var result = new List<CapturePluginStatus.PluginInfo>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string home in XiaokaiAllegro.SkillFiles.FindHomes(Paths.CadRoot))
+                foreach (var plugin in InstalledPluginsIn(Path.Combine(home, "pcbenv")))
+                    if (seen.Add(plugin.File)) result.Add(plugin);
+            return result;
+        }
+    }
+
+    sealed class PluginSection
+    {
+        public readonly string Key;
+        public PluginSection(string key) { Key = key; }
+    }
+
     class MainForm : Form
     {
         ListBox mCats;
@@ -1392,16 +1636,26 @@ namespace CadenceToolbox
         Control mDsnSection;
         Control mBrdSection;
         Label mMineHeading;
+        Panel mOriginalTools;
+        Label mHelpToggle;
+        Panel mHelpPanel;
+        bool mHelpExpanded;
+        readonly HashSet<string> mExpandedPluginGroups = new HashSet<string>();
         // public 是为了让自检能对着上面的 AssemblyFileVersion 比一遍。
-        public const string Version = "1.6.47";
+        public const string Version = "1.6.88";
+        string mBackdropId;
+        bool mBackdropPending;
+        readonly Dictionary<Control, Rectangle> mBackdropSurfaces = new Dictionary<Control, Rectangle>();
 
         public MainForm()
         {
             Text = "小开工具箱";
-            ClientSize = new Size(1024, 598);
-            MinimumSize = new Size(820, 480);
+            ClientSize = new Size(1120, 700);
+            MinimumSize = new Size(960, 600);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.GridBg;
+            DoubleBuffered = true;
+            BackgroundImageLayout = ImageLayout.None;
             // 去掉系统边框。白色的标题栏压在这套深蓝配色上面很突出,而窗口本身
             // 已经有自己的标题条(侧栏顶部那块),再来一条是重复的。
             //
@@ -1431,6 +1685,76 @@ namespace CadenceToolbox
             }
 
             if (mCats.Items.Count > 0) mCats.SelectedIndex = 0;
+            CollectBackdropSurfaces(this);
+            foreach (IconGrid grid in new[] { mGrid, mMineGrid, mDsnGrid, mBrdGrid }) {
+                grid.ClientSizeChanged += delegate { QueueBackdrop(); };
+                grid.LocationChanged += delegate { QueueBackdrop(); };
+                grid.VisibleChanged += delegate { QueueBackdrop(); };
+            }
+            Layout += delegate { QueueBackdrop(); };
+            mSplit.Layout += delegate { QueueBackdrop(); };
+            mSplit.SplitterMoved += delegate { QueueBackdrop(); };
+        }
+
+        // Wait until docking and splitter layout settle, then render one canvas
+        // for the entire window and share its coordinates with native grids.
+        void CollectBackdropSurfaces(Control control)
+        {
+            // WinForms transparency recursively repaints every ancestor. Paint
+            // each opaque surface directly from the shared canvas instead.
+            if (control.BackColor == Color.Transparent) {
+                control.BackColor = Theme.GridBg;
+                mBackdropSurfaces.Add(control, Rectangle.Empty);
+                if (!(control is BackdropPanel) && !(control is BackdropLabel))
+                    control.Paint += delegate(object sender, PaintEventArgs e) { WindowBackdrop.Paint((Control)sender, e); };
+            }
+            foreach (Control child in control.Controls) CollectBackdropSurfaces(child);
+        }
+
+        void QueueBackdrop()
+        {
+            if (mBackdropPending || !IsHandleCreated || IsDisposed || Disposing) return;
+            mBackdropPending = true;
+            BeginInvoke((MethodInvoker)delegate {
+                mBackdropPending = false;
+                if (!IsDisposed && !Disposing) UpdateBackdrop();
+            });
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e); UpdateBackdrop();
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { WindowBackdrop.Paint(this, e); }
+
+        void UpdateBackdrop()
+        {
+            if (WindowState == FormWindowState.Minimized || ClientSize.Width < 1 || ClientSize.Height < 1) return;
+            Image previous = null;
+            if (BackgroundImage == null || BackgroundImage.Size != ClientSize || mBackdropId != Theme.Current.Id) {
+                previous = BackgroundImage;
+                BackgroundImage = Skins.Render(Theme.Current, ClientSize);
+                mBackdropId = Theme.Current.Id;
+            }
+            foreach (IconGrid grid in new[] { mGrid, mMineGrid, mDsnGrid, mBrdGrid })
+                if (grid != null) grid.ApplyBackdrop(this, BackgroundImage);
+            foreach (Control surface in new List<Control>(mBackdropSurfaces.Keys)) {
+                if (!surface.Visible || surface.ClientSize.Width < 1 || surface.ClientSize.Height < 1) continue;
+                var bounds = new Rectangle(PointToClient(surface.PointToScreen(Point.Empty)), surface.ClientSize);
+                if (previous == null && mBackdropSurfaces[surface] == bounds) continue;
+                mBackdropSurfaces[surface] = bounds;
+                surface.Invalidate();
+            }
+            if (previous != null) previous.Dispose();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && BackgroundImage != null) {
+                Image image = BackgroundImage; BackgroundImage = null; image.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -1500,8 +1824,8 @@ namespace CadenceToolbox
             mFoot = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 30,
-                Text = "  Version : " + Version,
+                Height = 46,
+                Text = "  Version : " + Version + "\r\n  designed by Kavas",
                 ForeColor = Color.FromArgb(0xBF, 0xDA, 0xEA),
                 BackColor = Theme.FootBg,
                 TextAlign = ContentAlignment.MiddleLeft,
@@ -1514,7 +1838,7 @@ namespace CadenceToolbox
             var add = new Label
             {
                 Dock = DockStyle.Bottom,
-                Height = 34,
+                Height = 40,
                 Text = "  + 添加其他软件",
                 ForeColor = Color.FromArgb(0xD8, 0xEC, 0xF7),
                 BackColor = Theme.SideSel,
@@ -1546,6 +1870,27 @@ namespace CadenceToolbox
             pick.MouseLeave += delegate { pick.BackColor = Theme.SideSel; };
             mPick = pick;
             UpdatePickLabel();
+            var aiSettings = new Label {
+                Dock = DockStyle.Bottom, Height = 34, Text = "API KEY",
+                ForeColor = pick.ForeColor, BackColor = Theme.SideSel, TextAlign = ContentAlignment.MiddleLeft,
+                Font = pick.Font, Cursor = Cursors.Hand
+            };
+            aiSettings.Click += delegate {
+                try {
+                    byte[] image;
+                    using (var stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("xiaokai.ai.bridge")) {
+                        if (stream == null) throw new IOException("API KEY 设置程序未打包，请使用完整新版工具箱。");
+                        using (var buffer = new MemoryStream()) { stream.CopyTo(buffer); image = buffer.ToArray(); }
+                    }
+                    string hash;
+                    using (var sha = System.Security.Cryptography.SHA256.Create()) { hash = BitConverter.ToString(sha.ComputeHash(image)).Replace("-", "").Substring(0, 16); }
+                    string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XiaokaiToolbox", "AI", "bin");
+                    Directory.CreateDirectory(directory);
+                    string helper = Path.Combine(directory, "toolbox-ai-" + hash + ".exe");
+                    if (!File.Exists(helper)) File.WriteAllBytes(helper, image);
+                    Process.Start(new ProcessStartInfo(helper, "--settings") { UseShellExecute = false, CreateNoWindow = true });
+                } catch (Exception ex) { MessageBox.Show(this, ex.Message, "API KEY"); }
+            };
 
             MakeDragHandle(title);
 
@@ -1553,6 +1898,7 @@ namespace CadenceToolbox
             // mFoot 写在 add 后面 = 版本号在最底下,按钮在它上面。反过来的话
             // 按钮贴着窗口下沿,版本号浮在中间,像是排版塌了。
             side.Controls.Add(mCats);
+            side.Controls.Add(aiSettings);
             side.Controls.Add(pick);
             side.Controls.Add(add);
             side.Controls.Add(mFoot);
@@ -1569,7 +1915,7 @@ namespace CadenceToolbox
 
             // 选中项左侧一条亮边,比只换背景色更容易看出选了哪个。
             if (sel)
-                using (var b = new SolidBrush(Color.FromArgb(0x7F, 0xD4, 0xF5)))
+                using (var b = new SolidBrush(Theme.Current.Accent))
                     e.Graphics.FillRectangle(b, e.Bounds.X, e.Bounds.Y, 4, e.Bounds.Height);
 
             string txt = (string)mCats.Items[e.Index];
@@ -1588,18 +1934,21 @@ namespace CadenceToolbox
                 ForeColor = Color.White,
                 BackColor = Theme.HintBg,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0)
+                Padding = new Padding(16, 0, 100, 0),
+                AutoEllipsis = true
             };
             MakeDragHandle(mHint);
 
             // 边框没了,关闭和最小化得自己来。放在提示栏右端 —— 那里本来就是空的,
             // 而且和用户对"窗口右上角"的肌肉记忆一致。
-            mHint.Controls.Add(MakeWinButton("×", 46, delegate { Close(); }));
-            mHint.Controls.Add(MakeWinButton("—", 92,
+            mHint.Controls.Add(MakeWinButton(true, 48, delegate { Close(); }));
+            mHint.Controls.Add(MakeWinButton(false, 92,
                 delegate { WindowState = FormWindowState.Minimized; }));
 
             mGrid = MakeGrid();
             mMineGrid = MakeGrid();
+            mMineGrid.Spacing = new Size(152, 104);
+            mMineGrid.SmallImageList = new ImageList { ImageSize = new Size(1, 28), ColorDepth = ColorDepth.Depth32Bit };
             mDsnGrid = MakeRecentGrid();
             mBrdGrid = MakeRecentGrid();
 
@@ -1634,14 +1983,16 @@ namespace CadenceToolbox
             mSplit = new SplitContainer
             {
                 Dock = DockStyle.Fill,
-                Orientation = Orientation.Horizontal,
-                BackColor = Theme.HeadBg,     // 就是中间那条分隔线的颜色
+                Size = new Size(920, 600),
+                Orientation = Orientation.Vertical,
+                BackColor = Color.Transparent,
                 SplitterWidth = 6,
-                Panel1MinSize = 90,
-                Panel2MinSize = 74
+                SplitterDistance = 560,
+                Panel1MinSize = 300,
+                Panel2MinSize = 280
             };
-            mSplit.Panel1.BackColor = Theme.GridBg;
-            mSplit.Panel2.BackColor = Theme.GridBg;
+            mSplit.Panel1.BackColor = Color.Transparent;
+            mSplit.Panel2.BackColor = Color.Transparent;
             // SplitterMoving 只在鼠标真的拖的时候发;SplitterMoved 连我们自己设
             // SplitterDistance 也会发,用它的话第一次切分类就把标记点亮了,
             // "用户拖过就不再自动调"整个失效。
@@ -1652,9 +2003,12 @@ namespace CadenceToolbox
             mDsnSection.Visible = false;
             mBrdSection.Visible = false;
 
-            mSplit.Panel1.Controls.Add(WrapPadded(mGrid));
+            mOriginalTools = WrapPadded(mGrid);
+            mOriginalTools.Dock = DockStyle.Top;
+            mOriginalTools.SizeChanged += delegate { SizeContent(); };
             mSplit.Panel1.Controls.Add(mDsnSection);
             mSplit.Panel1.Controls.Add(mBrdSection);
+            mSplit.Panel1.Controls.Add(mOriginalTools);
             mSplit.Panel1.Controls.Add(MakeZoneLabel("  Cadence 原厂工具"));
             mSplit.Panel2.Controls.Add(WrapPadded(mMineGrid));
             mMineHeading = MakeZoneLabel("  自研工具  (右键可卸载 / 移除)");
@@ -1668,7 +2022,7 @@ namespace CadenceToolbox
             mHelp = new TextBox
             {
                 Dock = DockStyle.Bottom,
-                Height = 132,
+                Height = 110,
                 Multiline = true,
                 ReadOnly = true,
                 WordWrap = true,
@@ -1683,46 +2037,94 @@ namespace CadenceToolbox
 
             // 提示栏要关在内容面板里,不能直接加到窗体上:直接加的话它会横穿
             // 整个窗口宽度,把侧栏标题挤到下面去。
-            var content = new Panel { Dock = DockStyle.Fill, BackColor = Theme.GridBg };
+            mHelpPanel = new Panel { Dock = DockStyle.Bottom, Height = 36, BackColor = Theme.HelpBg, Padding = new Padding(14, 0, 14, 10) };
+            mHelpToggle = new Label { Dock = DockStyle.Top, Height = 36, Text = "工具说明   ·   选中工具查看详情     ▴ 展开",
+                TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.SideText, Cursor = Cursors.Hand };
+            mHelpToggle.Click += delegate { mHelpExpanded = !mHelpExpanded; SizeContent(); };
+            mHelp.Visible = false; mHelp.Dock = DockStyle.Fill;
+            mHelpPanel.Controls.Add(mHelp); mHelpPanel.Controls.Add(mHelpToggle);
+            var content = new BackdropPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
             content.Controls.Add(mSplit);   // 先加 = 最后停靠 = 吃掉剩余空间
-            content.Controls.Add(mHelp);    // 底部一条
+            content.Controls.Add(mHelpPanel);
             content.Controls.Add(mHint);    // 最先停靠 = 拿到顶部一条
             Controls.Add(content);
             // 父窗口 Resize 时停靠布局可能还没结束,以分区的实际尺寸再调整一次。
             mSplit.SizeChanged += delegate { SizeContent(); };
         }
 
-        int FillCapturePlugins()
+        int FillPlugins(bool allegro)
         {
             List<CapturePluginStatus.PluginInfo> installed =
-                CapturePluginStatus.InstalledPlugins();
-            string capture = Paths.Expand(@"%SPB%\tools\bin\Capture.exe");
+                allegro ? AllegroSkillStatus.InstalledPlugins() : CapturePluginStatus.InstalledPlugins();
+            string capture = Paths.Expand(allegro ? @"%SPB%\tools\bin\allegro.exe" : @"%SPB%\tools\bin\Capture.exe");
+            var groups = new Dictionary<string, List<CapturePluginStatus.PluginInfo>>();
+            var groupOrder = new List<string>();
             foreach (CapturePluginStatus.PluginInfo plugin in installed)
             {
-                string key = "capture-plugin:" + plugin.File;
+                string group = allegro ? (plugin.Description.StartsWith("查看类") ? "查看工具"
+                    : plugin.Description.StartsWith("检查类") ? "检查工具" : "修改工具")
+                    : plugin.File == "lceda2orcadMenu.tcl" || plugin.File == "textaffixMenu.tcl" ? "元件与编辑"
+                    : plugin.File == "netlocatorMenu.tcl" ? "网络与高亮"
+                    : plugin.File == "bomtoolMenu.tcl" ? "BOM与输出" : "设计检查";
+                if (!groups.ContainsKey(group)) {
+                    groups.Add(group, new List<CapturePluginStatus.PluginInfo>()); groupOrder.Add(group);
+                }
+                groups[group].Add(plugin);
+            }
+            if (!allegro) {
+                groupOrder.Clear();
+                foreach (string group in new[] { "元件与编辑", "网络与高亮", "BOM与输出", "设计检查" })
+                    if (groups.ContainsKey(group)) groupOrder.Add(group);
+            }
+            foreach (string group in groupOrder) {
+                string sectionKey = (allegro ? "allegro:" : "capture:") + group;
+                bool expanded = mExpandedPluginGroups.Contains(sectionKey);
+                mMineGrid.Items.Add(new ListViewItem((expanded ? "▾  " : "▸  ") + group + "  (" + groups[group].Count + ")") {
+                    Tag = new PluginSection(sectionKey), ToolTipText = "单击展开或收起分类；方向键也可操作。"
+                });
+                if (!expanded) continue;
+                foreach (CapturePluginStatus.PluginInfo plugin in groups[group]) {
                 string iconPath = File.Exists(capture) ? capture
                     : Path.Combine(Paths.Toolbox, plugin.File);
-                mMineGrid.LargeImageList.Images.Add(key, Icons.ForPath(iconPath, plugin.Name));
+                string key = plugin.Host + ":" + plugin.File + "|" + iconPath;
+                if (!mMineGrid.LargeImageList.Images.ContainsKey(key))
+                    mMineGrid.LargeImageList.Images.Add(key, Icons.ForPath(iconPath, plugin.Name));
                 mMineGrid.Items.Add(new ListViewItem(plugin.Name, key)
                 {
                     Tag = plugin,
-                    ToolTipText = plugin.Description
+                    ToolTipText = plugin.Name + "\r\n" + plugin.Description
                 });
+                }
             }
             if (installed.Count == 0)
-                mMineGrid.Items.Add(new ListViewItem("未检测到已安装插件")
+                mMineGrid.Items.Add(new ListViewItem(allegro ? "未检测到已安装 SKILL" : "未检测到已安装插件")
                 {
                     ForeColor = Theme.SideText
                 });
             return Math.Max(1, installed.Count);
         }
 
+        void TogglePluginSection(PluginSection section, bool? expand)
+        {
+            bool open = expand ?? !mExpandedPluginGroups.Contains(section.Key);
+            if (open) mExpandedPluginGroups.Add(section.Key); else mExpandedPluginGroups.Remove(section.Key);
+            ShowCategory();
+            foreach (ListViewItem item in mMineGrid.Items) {
+                var current = item.Tag as PluginSection;
+                if (current == null || current.Key != section.Key) continue;
+                item.Selected = true; item.Focused = true; item.EnsureVisible(); break;
+            }
+            mMineGrid.Focus();
+        }
+
         void ShowPluginInfo(CapturePluginStatus.PluginInfo plugin)
         {
+            ExpandHelp(plugin.Name);
             mHint.Text = "  " + plugin.Name + " - " + plugin.Description;
             mHelp.Text = plugin.Name + "\r\n\r\n" + plugin.Description
-                + "\r\n\r\n在 Capture 原理图中按 Alt+K 打开插件功能集合。"
-                + "\r\n\r\n插件由小开工具箱安装到 OrCAD Capture 的 capAutoLoad 目录。";
+                + "\r\n\r\n" + plugin.Usage
+                + "\r\n\r\n" + (plugin.Host == "Allegro" ? "安装位置：" + plugin.Directory
+                    : "插件由小开工具箱安装到 OrCAD Capture 的 capAutoLoad 目录。");
             mHelp.SelectionStart = 0;
             mHelp.SelectionLength = 0;
             mHelp.ScrollToCaret();
@@ -1735,11 +2137,11 @@ namespace CadenceToolbox
         // 背景色必须和网格一致,否则上面会出现一条深色的横带。
         Panel WrapPadded(Control inner)
         {
-            var p = new Panel
+            var p = new BackdropPanel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Theme.GridBg,
-                Padding = new Padding(6, 12, 0, 0)
+                BackColor = Color.Transparent,
+                Padding = new Padding(12, 8, 12, 8)
             };
             p.Controls.Add(inner);
             return p;
@@ -1763,6 +2165,7 @@ namespace CadenceToolbox
                 // 打不到它了。
                 HideSelection = true
             };
+            g.Spacing = new Size(112, 86);
             g.LargeImageList = new ImageList
             {
                 ImageSize = new Size(32, 32),
@@ -1770,9 +2173,20 @@ namespace CadenceToolbox
             };
             g.ItemSelectionChanged += OnPick;
             g.MouseDoubleClick += OnLaunch;
+            g.MouseClick += delegate(object sender, MouseEventArgs e) {
+                if (e.Button != MouseButtons.Left || e.Clicks != 1) return;
+                ListViewItem item = g.GetItemAt(e.X, e.Y);
+                var section = item == null ? null : item.Tag as PluginSection;
+                if (section != null) TogglePluginSection(section, null);
+            };
             // 回车等同双击:键盘选到了就该能直接启动。
             g.KeyDown += delegate (object s, KeyEventArgs e)
             {
+                var section = g.SelectedItems.Count == 0 ? null : g.SelectedItems[0].Tag as PluginSection;
+                if (section != null && (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space || e.KeyCode == Keys.Right || e.KeyCode == Keys.Left)) {
+                    TogglePluginSection(section, e.KeyCode == Keys.Right ? (bool?)true : e.KeyCode == Keys.Left ? (bool?)false : null);
+                    e.Handled = true; e.SuppressKeyPress = true; return;
+                }
                 if (e.KeyCode == Keys.Enter) LaunchSelected();
             };
             return g;
@@ -1783,7 +2197,7 @@ namespace CadenceToolbox
             var g = new IconGrid
             {
                 Dock = DockStyle.Fill,
-                View = View.SmallIcon,
+                View = View.Details,
                 BackColor = Theme.GridBg,
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.None,
@@ -1794,9 +2208,10 @@ namespace CadenceToolbox
             };
             g.SmallImageList = new ImageList
             {
-                ImageSize = new Size(16, 16),
+                ImageSize = new Size(16, 24),
                 ColorDepth = ColorDepth.Depth32Bit
             };
+            g.UseRows(false);
             g.ItemSelectionChanged += OnPickRecent;
             g.MouseDoubleClick += OnLaunchRecent;
             g.KeyDown += delegate(object s, KeyEventArgs e)
@@ -1808,22 +2223,22 @@ namespace CadenceToolbox
 
         Control MakeRecentSection(string title, IconGrid grid)
         {
-            var section = new Panel { Dock = DockStyle.Bottom, Height = 100, BackColor = Theme.GridBg };
-            var heading = new Label
+            var section = new BackdropPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+            var heading = new BackdropLabel
             {
                 Dock = DockStyle.Top,
-                Height = 24,
+                Height = 32,
                 Text = title,
                 ForeColor = Color.FromArgb(0xD8, 0xEC, 0xF7),
-                BackColor = Theme.HeadBg,
+                BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = new Font("Microsoft YaHei UI", 8.5f)
             };
-            var body = new Panel
+            var body = new BackdropPanel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Theme.GridBg,
-                Padding = new Padding(6, 4, 6, 4)
+                BackColor = Color.Transparent,
+                Padding = new Padding(12, 0, 12, 12)
             };
             body.Controls.Add(grid);
             section.Controls.Add(body);
@@ -1841,16 +2256,15 @@ namespace CadenceToolbox
         {
             grid.BeginUpdate();
             grid.Items.Clear();
-            grid.SmallImageList.Images.Clear();
             try
             {
                 List<RecentDocument> documents = RecentDocuments.Read(extension, 8);
-                int index = 0;
                 foreach (RecentDocument document in documents)
                 {
-                    string key = extension + index++;
-                    grid.SmallImageList.Images.Add(key, Icons.ForPath(document.Path,
-                        Path.GetFileNameWithoutExtension(document.Path)));
+                    string key = document.Path;
+                    if (!grid.SmallImageList.Images.ContainsKey(key))
+                        grid.SmallImageList.Images.Add(key, Icons.ForPath(document.Path,
+                            Path.GetFileNameWithoutExtension(document.Path)));
                     var item = new ListViewItem(Path.GetFileNameWithoutExtension(document.Path), key)
                     {
                         Tag = document,
@@ -1876,13 +2290,13 @@ namespace CadenceToolbox
 
         Label MakeZoneLabel(string text)
         {
-            return new Label
+            return new BackdropLabel
             {
                 Dock = DockStyle.Top,
-                Height = 26,
+                Height = 36,
                 Text = text,
                 ForeColor = Color.FromArgb(0xD8, 0xEC, 0xF7),
-                BackColor = Theme.HeadBg,
+                BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Font = new Font("Microsoft YaHei UI", 9f)
             };
@@ -1890,26 +2304,15 @@ namespace CadenceToolbox
 
         // rightOffset 是距提示栏右边缘的距离,靠 Anchor 顶右保持住 —— 提示栏
         // 是 Dock.Top,窗口一变宽它就变宽,写死 Left 的话按钮会留在原地。
-        Label MakeWinButton(string glyph, int rightOffset, EventHandler onClick)
+        CaptionButton MakeWinButton(bool close, int rightOffset, EventHandler onClick)
         {
-            var b = new Label
+            var b = new CaptionButton(close)
             {
-                Text = glyph,
-                Width = 40,
-                Height = 34,
                 Left = mHint.Width - rightOffset,
                 Top = 0,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                ForeColor = Color.White,
-                BackColor = Theme.HintBg,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Microsoft YaHei UI", 11f),
-                Cursor = Cursors.Hand
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
             };
             b.Click += onClick;
-            // 悬停变色。没有边框和阴影的情况下,这是"这里能点"的唯一提示。
-            b.MouseEnter += delegate { b.BackColor = Theme.SideHot; };
-            b.MouseLeave += delegate { b.BackColor = Theme.HintBg; };
             return b;
         }
 
@@ -1918,17 +2321,25 @@ namespace CadenceToolbox
             string cat = mCats.SelectedItem as string;
             if (cat == null) return;
 
+            if (IsHandleCreated) SetContentRedraw(false);
+            SuspendLayout(); mSplit.SuspendLayout();
+            mSplit.Panel1.SuspendLayout(); mSplit.Panel2.SuspendLayout();
+            mGrid.BeginUpdate(); mMineGrid.BeginUpdate(); mDsnGrid.BeginUpdate(); mBrdGrid.BeginUpdate();
+            try {
+            bool orcad = cat == "OrCAD 工具";
+            bool allegro = cat == "Allegro 工具";
+            if (orcad || allegro) mMineGrid.UseRows(true);
+            else mMineGrid.UseIcons();
             var all = Manifest.InCategory(cat);
             int cad  = Fill(mGrid, all, false);
             int mine = Fill(mMineGrid, all, true);
-            bool orcad = cat == "OrCAD 工具";
-            bool allegro = cat == "Allegro 工具";
             mDsnSection.Visible = orcad;
             mBrdSection.Visible = allegro;
             mMineHeading.Text = orcad
                 ? (mine == 0 ? "  Capture 插件" : "  自研工具 / Capture 插件  (右键可卸载 / 移除)")
+                : allegro ? (mine == 0 ? "  Allegro SKILL" : "  自研工具 / Allegro SKILL")
                 : "  自研工具  (右键可卸载 / 移除)";
-            if (orcad) mine += FillCapturePlugins();
+            if (orcad || allegro) mine += FillPlugins(allegro);
             RefreshRecentFiles();
 
             // 空的那半整块折起来,不留一条空标题占地方。
@@ -1939,24 +2350,57 @@ namespace CadenceToolbox
 
             SizeContent();
             ShowHintDefault();
+            } finally {
+                mSplit.Panel1.ResumeLayout(true); mSplit.Panel2.ResumeLayout(true);
+                mSplit.ResumeLayout(true); ResumeLayout(true);
+                UpdateBackdrop();
+                mGrid.EndUpdate(); mMineGrid.EndUpdate(); mDsnGrid.EndUpdate(); mBrdGrid.EndUpdate();
+                if (IsHandleCreated) SetContentRedraw(true);
+            }
+        }
+
+        void SetContentRedraw(bool enabled)
+        {
+            // Hold the complete content tree while native views and docking
+            // change, then present the completed layout in one repaint.
+            SendMessage(mSplit.Parent.Handle, 0x000B, enabled ? 1 : 0, 0);
+            if (enabled) mSplit.Parent.Invalidate(true);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get { CreateParams cp = base.CreateParams; cp.ExStyle |= 0x02000000; return cp; }
         }
 
         void SizeContent()
         {
             if (mHelp == null || mSplit == null || WindowState == FormWindowState.Minimized) return;
+            if (mOriginalTools != null) {
+                bool recent = mDsnSection.Visible || mBrdSection.Visible;
+                mOriginalTools.Dock = recent ? DockStyle.Top : DockStyle.Fill;
+                if (recent) {
+                    Size spacing = mGrid.Spacing;
+                    int columns = Math.Max(1, (mOriginalTools.ClientSize.Width - mOriginalTools.Padding.Horizontal) / spacing.Width);
+                    int rows = (mGrid.Items.Count + columns - 1) / columns;
+                    mOriginalTools.Height = Math.Max(94, rows * spacing.Height + mOriginalTools.Padding.Vertical + 6);
+                }
+            }
             // 窗口变矮时先收短说明区,给原厂工具、常用文件和插件各留出空间。
-            mHelp.Height = Math.Max(60, Math.Min(132, ClientSize.Height - 414));
+            if (mHelpPanel != null) {
+                mHelpPanel.Height = mHelpExpanded ? 146 : 36;
+                mHelp.Visible = mHelpExpanded;
+                mHelpToggle.Text = mHelpExpanded ? "工具说明                                            ▾ 收起" : "工具说明   ·   选中工具查看详情     ▴ 展开";
+            }
             // 用户拖动过分隔线后继续保留他的比例。
             if (!mSplit.Panel1Collapsed && !mSplit.Panel2Collapsed && !mUserDragged)
             {
                 // 最小化或停靠布局的中间状态可能没有足够高度容纳两块。
                 // 此时保留分隔条位置,等尺寸恢复后由 SizeChanged 重新计算。
                 int minimum = mSplit.Panel1MinSize;
-                int maximum = mSplit.ClientSize.Height - mSplit.Panel2MinSize - mSplit.SplitterWidth;
+                int maximum = mSplit.ClientSize.Width - mSplit.Panel2MinSize - mSplit.SplitterWidth;
                 if (maximum < minimum) return;
-                int rows = (mMineGrid.Items.Count + 5) / 6;
-                int want = 26 + 12 + rows * 92 + 8;
-                int distance = mSplit.ClientSize.Height - want - mSplit.SplitterWidth;
+                int want = Math.Min(360, Math.Max(300, mSplit.ClientSize.Width * 38 / 100));
+                int distance = mSplit.ClientSize.Width - want - mSplit.SplitterWidth;
                 mSplit.SplitterDistance = Math.Max(minimum, Math.Min(distance, maximum));
             }
         }
@@ -1969,21 +2413,23 @@ namespace CadenceToolbox
         {
             g.BeginUpdate();
             g.Items.Clear();
-            g.LargeImageList.Images.Clear();
 
             int n = 0;
             foreach (Tool t in all)
             {
                 if (t.Mine != mine) continue;
-                string key = t.Name;
-                g.LargeImageList.Images.Add(key, Icons.For(t));
-                var it = new ListViewItem(t.Name, key) { Tag = t };
+                // Clearing the image list recreates its native handle and makes
+                // ListView reload its background for every icon added afterwards.
+                string key = t.Name + "|" + t.IconSource;
+                if (!g.LargeImageList.Images.ContainsKey(key)) g.LargeImageList.Images.Add(key, Icons.For(t));
+                string caption = System.Text.RegularExpressions.Regex.Replace(t.Name, @"\s+v\d[\d.]*$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var it = new ListViewItem(caption, key) { Tag = t, ToolTipText = t.Name + "\r\n" + t.Desc };
                 if (!t.Exists)
                 {
                     // 灰显但不隐藏:一个装了一半的 Cadence 应该看得出缺了什么,
                     // 而不是让人以为工具箱漏做了这个工具。
                     it.ForeColor = Color.FromArgb(0x9F, 0xBF, 0xD2);
-                    it.Text = t.Name + "(未安装)";
+                    it.ToolTipText = t.Name + "（未安装）\r\n" + t.Missing;
                 }
                 g.Items.Add(it);
                 n++;
@@ -1994,8 +2440,14 @@ namespace CadenceToolbox
 
         void ShowHintDefault()
         {
-            mHint.Text = "  提示: 单击选择工具可查看工具说明,双击可启动工具。";
+            mHint.Text = "  " + (mCats == null ? "小开工具箱" : Convert.ToString(mCats.SelectedItem)) + "    ·    双击启动，单击查看说明";
             if (mHelp != null) mHelp.Text = HelpPlaceholder;
+            mHelpExpanded = false; SizeContent();
+        }
+
+        void ExpandHelp(string name)
+        {
+            mHelpExpanded = true; SizeContent();
         }
 
         void OnPick(object sender, ListViewItemSelectionChangedEventArgs e)
@@ -2035,6 +2487,7 @@ namespace CadenceToolbox
             IconGrid other = sender == mDsnGrid ? mBrdGrid : mDsnGrid;
             if (other.SelectedItems.Count > 0) other.SelectedItems.Clear();
 
+            ExpandHelp(Path.GetFileName(document.Path));
             string extension = Path.GetExtension(document.Path).ToUpperInvariant();
             mHint.Text = "  " + Path.GetFileName(document.Path) + " - 双击使用 Cadence 打开";
             mHelp.Text = "常用 " + extension + " 文件\r\n\r\n"
@@ -2092,6 +2545,7 @@ namespace CadenceToolbox
         // 说明没加载出来。
         void ShowHelp(Tool t)
         {
+            ExpandHelp(t.Name);
             string body = t.Help.Length > 0 ? t.Help : t.Desc;
             var sb = new System.Text.StringBuilder();
             sb.Append(t.Name).Append("\r\n\r\n");
@@ -2111,7 +2565,8 @@ namespace CadenceToolbox
         void OnLaunch(object sender, MouseEventArgs e)
         {
             var g = sender as IconGrid;
-            if (g != null && g.GetItemAt(e.X, e.Y) != null) LaunchSelected();
+            ListViewItem item = g == null ? null : g.GetItemAt(e.X, e.Y);
+            if (item != null && item.Tag is Tool) { mLast = g; LaunchSelected(); }
         }
 
         Tool SelectedIn(IconGrid g)

@@ -1,0 +1,109 @@
+; Keep upstream implementations intact; wrappers add reversible B7/B8 actions.
+unless(boundp('xkOriginalTextRotate) xkOriginalTextRotate = getd('text_r))
+unless(boundp('xkOriginalQuickText) xkOriginalQuickText = getd('quicktext))
+unless(boundp('xkTextRotateState) xkTextRotateState = nil)
+unless(boundp('xkTextSizeState) xkTextSizeState = nil)
+
+procedure(xkTextSnapshot(layers)
+  let((visibility enabled buttons selected rows)
+    visibility=axlVisibleGet()
+    enabled=axlGetFindFilter(nil)
+    buttons=axlGetFindFilter(t)
+    selected=axlGetSelSet()
+    unwindProtect(
+      progn(
+        axlVisibleDesign(nil)
+        foreach(layer layers axlVisibleLayer(layer t))
+        axlClearSelSet()
+        axlSetFindFilter(?enabled '("noall" "text") ?onButtons '("noall" "text"))
+        axlAddSelectAll()
+        foreach(obj axlGetSelSet()
+          rows=cons(list(obj obj->xy obj->rotation obj->textBlock obj->isMirrored obj->justify) rows)))
+      progn(
+        axlClearSelSet()
+        axlVisibleSet(visibility)
+        axlSetFindFilter(?enabled enabled ?onButtons buttons)
+        when(selected axlAddSelectObject(selected))))
+    rows))
+
+procedure(xkTextRestore(rows sizeOnly)
+  let((obj orient missing)
+    foreach(row rows
+      obj=axlDBRefreshId(car(row))
+      if(obj then
+        if(sizeOnly then
+          axlDBChangeText(obj nil atoi(nth(3 row)))
+        else
+          orient=make_axlTextOrientation(?textBlock obj->textBlock ?rotation nth(2 row)
+            ?mirrored obj->isMirrored ?justify obj->justify)
+          axlDBChangeText(obj nil orient)
+          axlTransformObject(obj ?move list(caadr(row)-car(obj->xy) cadadr(row)-cadr(obj->xy))))
+      else missing=cons(row missing)))
+    axlVisibleUpdate(t)
+    missing))
+
+procedure(xkTextRotateToggle()
+  let((rows changed result)
+    if(xkTextRotateState && car(xkTextRotateState) == axlDBGetDesign() then
+      rows=xkTextRestore(cadr(xkTextRotateState) nil)
+      xkTextRotateState=if(rows then list(axlDBGetDesign() rows) else nil)
+      axlMsgPut("B7：已恢复整理前的方向和位置；无法恢复 %d 项。" length(rows))
+    else
+      xkTextRotateState=nil
+      rows=xkTextSnapshot('( "REF DES/SILKSCREEN_TOP" "REF DES/SILKSCREEN_BOTTOM"
+        "REF DES/ASSEMBLY_TOP" "REF DES/ASSEMBLY_BOTTOM"))
+      result=errset(apply(xkOriginalTextRotate nil) t)
+      foreach(row rows
+        when(axlDBRefreshId(car(row)) &&
+            (cadr(row) != car(row)->xy || nth(2 row) != car(row)->rotation)
+          changed=cons(row changed)))
+      when(changed xkTextRotateState=list(axlDBGetDesign() changed))
+      axlVisibleUpdate(t)
+      axlMsgPut("B7：已整理 %d 项；再次双击恢复。" length(changed))
+      unless(result error("B7：整理未完成，再次运行可恢复已修改项。")))
+    t))
+axlCmdRegister("text_rotate" 'xkTextRotateToggle)
+
+procedure(xkTextBlockSnapshot()
+  let((rows p)
+    for(number 1 16
+      p=axlGetParam(sprintf(nil "paramTextBlock:%d" number))
+      rows=cons(list(number p->width p->height p->lineSpace p->photoWidth p->charSpace) rows))
+    rows))
+
+procedure(xkTextSizeToggle()
+  let((rows blocks changed result p factor savedUnits)
+    if(xkTextSizeState && car(xkTextSizeState) == axlDBGetDesign() then
+      rows=xkTextRestore(cadr(xkTextSizeState) t)
+      savedUnits=nth(3 xkTextSizeState)
+      factor=1.0
+      when(savedUnits != axlGetParam("paramDesign")->units
+        factor=if(savedUnits == "mils" then 0.0254 else 1.0/0.0254))
+      foreach(row nth(2 xkTextSizeState)
+        p=axlGetParam(sprintf(nil "paramTextBlock:%d" car(row)))
+        p->width=nth(1 row)*factor
+        p->height=nth(2 row)*factor
+        p->lineSpace=nth(3 row)*factor
+        p->photoWidth=nth(4 row)*factor
+        p->charSpace=nth(5 row)*factor
+        axlSetParam(p))
+      xkTextSizeState=if(rows then list(axlDBGetDesign() rows nth(2 xkTextSizeState) savedUnits) else nil)
+      axlVisibleUpdate(t)
+      axlMsgPut("B8：已恢复原字号及1至16号文字块；无法恢复 %d 项。" length(rows))
+    else
+      xkTextSizeState=nil
+      rows=xkTextSnapshot('( "REF DES/SILKSCREEN_TOP" "REF DES/SILKSCREEN_BOTTOM"
+        "PACKAGE GEOMETRY/SILKSCREEN_TOP" "PACKAGE GEOMETRY/SILKSCREEN_BOTTOM"))
+      blocks=xkTextBlockSnapshot()
+      savedUnits=axlGetParam("paramDesign")->units
+      result=errset(apply(xkOriginalQuickText nil) t)
+      foreach(row rows
+        when(axlDBRefreshId(car(row)) && nth(3 row) != car(row)->textBlock
+          changed=cons(row changed)))
+      xkTextSizeState=list(axlDBGetDesign() changed blocks savedUnits)
+      axlVisibleUpdate(t)
+      axlMsgPut("B8：已设置字号；再次双击恢复。")
+      unless(result error("B8：设置未完成，再次运行可恢复已修改项。")))
+    t))
+axlCmdRegister("quick_textset" 'xkTextSizeToggle)
+

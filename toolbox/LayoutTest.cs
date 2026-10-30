@@ -34,7 +34,7 @@ namespace CadenceToolbox
         {
             if (split.Panel1Collapsed || split.Panel2Collapsed) return;
             Check(split.SplitterDistance >= split.Panel1MinSize
-                && split.SplitterDistance <= split.ClientSize.Height
+                && split.SplitterDistance <= split.ClientSize.Width
                     - split.Panel2MinSize - split.SplitterWidth,
                 "Splitter remains within both panel limits");
         }
@@ -57,20 +57,9 @@ namespace CadenceToolbox
                     Application.DoEvents();
                     var categories = Field<ListBox>(form, "mCats");
                     var split = Field<SplitContainer>(form, "mSplit");
-                    foreach (Size requested in new[] { new Size(1024, 598), new Size(820, 480), new Size(1400, 800) })
+                    foreach (Size size in new[] { new Size(1024, 620), new Size(960, 600), new Size(1400, 800) })
                     {
-                        // Hosted runners can have a small virtual desktop. Windows
-                        // clamps restored bounds to that desktop; test sizes that fit
-                        // it so a normal OS adjustment is not reported as data loss.
-                        Rectangle desktop = Screen.FromControl(form).WorkingArea;
-                        int borderWidth = form.Width - form.ClientSize.Width;
-                        int borderHeight = form.Height - form.ClientSize.Height;
-                        form.Location = desktop.Location;
-                        form.ClientSize = new Size(
-                            Math.Min(requested.Width, Math.Max(1, desktop.Width - borderWidth)),
-                            Math.Min(requested.Height, Math.Max(1, desktop.Height - borderHeight)));
-                        Application.DoEvents();
-                        Size size = form.ClientSize;
+                        form.ClientSize = size;
                         for (int round = 0; round < 3; round++)
                         {
                             for (int i = 0; i < categories.Items.Count; i++)
@@ -89,15 +78,40 @@ namespace CadenceToolbox
                         }
                     }
 
+                    categories.SelectedItem = "Allegro 工具";
+                    Application.DoEvents();
+                    Check(Field<Label>(form, "mMineHeading").Text.Contains("Allegro SKILL"), "Allegro SKILL heading");
+                    var grid = Field<IconGrid>(form, "mMineGrid");
+                    foreach (ListViewItem item in grid.Items)
+                    {
+                        var plugin = item.Tag as CapturePluginStatus.PluginInfo;
+                        if (plugin == null) continue;
+                        Check(plugin.Host == "Allegro", "Allegro excludes Capture plugins");
+                        item.Selected = true;
+                        Application.DoEvents();
+                        Check(Field<TextBox>(form, "mHelp").Text.Contains("安装位置：")
+                            && Field<TextBox>(form, "mHelp").Text.Contains("Allegro 板图"), "SKILL selection shows path and usage");
+                        using (var selectedShot = new Bitmap(form.Width, form.Height))
+                        {
+                            form.DrawToBitmap(selectedShot, new Rectangle(Point.Empty, selectedShot.Size));
+                            selectedShot.Save(Path.Combine(Paths.Toolbox, "allegro-skill-description.png"));
+                        }
+                        item.Selected = false;
+                    }
+                    using (var shot = new Bitmap(form.Width, form.Height))
+                    {
+                        form.DrawToBitmap(shot, new Rectangle(Point.Empty, shot.Size));
+                        shot.Save(Path.Combine(Paths.Toolbox, "allegro-skills.png"));
+                    }
                     categories.SelectedItem = "OrCAD 工具";
                     Application.DoEvents();
                     split.Dock = DockStyle.None;
                     // Height zero gives the reported upper bound: 0 - 74 - 6 = -80.
-                    foreach (int height in new[] { 0, 50, 100, 169, 170, 300 })
+                    foreach (int width in new[] { 0, 50, 100, 169, 170, 300 })
                     {
-                        split.Height = height;
+                        split.Width = width;
                         ResizeContent(form);
-                        Check(true, "Transient height " + height + " does not throw");
+                        Check(true, "Transient width " + width + " does not throw");
                     }
                     split.Dock = DockStyle.Fill;
                     form.PerformLayout();
@@ -105,9 +119,9 @@ namespace CadenceToolbox
                     CheckDistance(split);
 
                     int draggedDistance = split.Panel1MinSize + 20;
-                    split.SplitterDistance = draggedDistance;
                     typeof(MainForm).GetField("mUserDragged",
                         BindingFlags.Instance | BindingFlags.NonPublic).SetValue(form, true);
+                    split.SplitterDistance = draggedDistance;
                     ResizeContent(form);
                     Check(split.SplitterDistance == draggedDistance, "Manual divider position is preserved");
                     form.WindowState = FormWindowState.Minimized;

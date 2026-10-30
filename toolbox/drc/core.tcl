@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Native Batch DRC reporting. No design-file parser and no independent ERC matrix.
 namespace eval ::xiaokai::drc {
-    variable version 1.5.1
+    variable version 1.9.9
     variable fields {rule_id rule_name hierarchy_path sheet_name refdes net_name pin_info message}
     # Complete allowlist; all eleven leaves run in one native Batch DRC call.
     variable rules {

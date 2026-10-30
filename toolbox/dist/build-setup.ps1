@@ -52,6 +52,8 @@ if ($LASTEXITCODE -ne 0) { Die "主程序编译失败" }
 $appExe = Join-Path $out 'XiaokaiToolbox.exe'
 if (-not (Test-Path $appExe)) { Die "没找到 $appExe" }
 Ok ("XiaokaiToolbox.exe  {0:N0} 字节" -f (Get-Item $appExe).Length)
+& ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $root 'allegro/build.ps1')))) -Root (Join-Path $root 'allegro')
+if ($LASTEXITCODE -ne 0) { Die "Allegro 辅助程序编译失败" }
 
 # ---- 3. 凑载荷 ----
 # 资源名一律 ASCII:/resource: 的名字带中文的话,csc 按 ANSI 解析命令行,名字进去
@@ -71,9 +73,9 @@ foreach ($name in @('LICENSE', 'COPYRIGHT', 'THIRD_PARTY_NOTICES.md', 'BUILD_ENV
 $sourceNotice = @'
 小开工具箱按 GPL-3.0-only 发布，完整条款见 LICENSE。
 本次发布同时提供完整对应源码（包括生成和安装脚本）：
-https://github.com/KavasDD/XKGJX/releases/tag/vVERSION
+https://github.com/KavasDD/KaiTools/releases/tag/vVERSION
 下载 XKGJX-source-vVERSION.zip；也可从同名 Git 标签取得源码：
-https://github.com/KavasDD/XKGJX/tree/vVERSION
+https://github.com/KavasDD/KaiTools/tree/vVERSION
 项目没有任何担保。分发修改版时须保留声明、标明修改并按 GPL 提供对应源码。
 第三方作者与依赖许可见 THIRD_PARTY_NOTICES.md 和 LICENSES/。
 '@
@@ -100,7 +102,17 @@ $payload = [ordered]@{
     'specgen.ico'                  = Join-Path $root 'specgen.ico'
     'jlc3d.exe'                    = Join-Path $out  'JLC3D-Downloader.exe'
     'jlc3d.ico'                    = Join-Path $root 'jlc3d.ico'
+    'markinglookup.exe'            = Join-Path $out '常见丝印反查.exe'
     'startupoptimizer.exe'         = Join-Path $out 'OrCAD启动优化工具.exe'
+}
+$payload['allegro.install.ps1'] = Join-Path $root 'allegro/install.ps1'
+foreach ($name in @('film_reorder.il', 'Auto_artwork.il', 'Quick_ColorS.il', 'x_change_via_net.il',
+                    'Find_Component.il', 'Find_DRC.il', 'quick_grids.il', 'quick_display.il',
+                    'conv.il', 'highlight_padstack.il', 'show_library.il', 'show_height.il',
+                    'fTextTuneTools.il', 'check_no_refdes.il', 'gxl_wdzcheck_text_overlap.il', 'jkcheck_refdes_cross.il', 'x_silk_in_out.il', 'xiaokaiTextTools.il',
+                    'lgs_hilight_no_fanout.il', 'lgs_check_solder_to_line_V1_0.il', 'quick_chSmd2ThrP.il', 'find_pin_no_past.il', 'find_pin_no_solder.il',
+            'xiaokaiDanglings.il', 'xiaokaiAllegroMenu.il', 'xiaokaiAllegroHotkey.exe', 'xiaokaiAiBridge.exe')) {
+    $payload["allegro.$name"] = Join-Path $root "allegro/skill/$name"
 }
 $legalResourceFiles = @{}
 foreach ($file in @(Get-ChildItem -LiteralPath $legalDir -File -Recurse | Sort-Object FullName)) {
@@ -114,8 +126,9 @@ foreach ($file in @(Get-ChildItem -LiteralPath $legalDir -File -Recurse | Sort-O
 $must = @(
     'app.exe', 'tools.ini', 'logo.ico', 'lceda2orcadMenu.tcl',
     'bomtoolMenu.tcl', 'netlocatorMenu.tcl', 'drctoolMenu.tcl', 'textaffixMenu.tcl', 'xiaokaiSchematicPlugins.tcl',
-    'startupoptimizer.exe'
+    'startupoptimizer.exe', 'markinglookup.exe'
 )
+$must += @($payload.Keys | Where-Object { $_ -like 'allegro.*' })
 $must += @($legalResourceFiles.Keys)
 $must += @('specgen.exe', 'jlc3d.exe')
 $res = @(); $total = 0
@@ -136,7 +149,7 @@ Ok ("载荷合计 {0:N1} MB" -f ($total / 1MB))
 
 # ---- 4. 先编卸载程序(不带载荷) ----
 Write-Host "`n[4/6] 编译卸载程序"
-$src   = Join-Path $here 'Setup.cs'
+$src = @((Join-Path $here 'Setup.cs'), (Join-Path $root 'allegro/AllegroSkillFiles.cs'), (Join-Path $root 'allegro/AllegroSetup.cs'))
 $ico   = Join-Path $root 'toolbox.ico'
 $unin  = Join-Path $out  'uninstall.exe'
 $refs  = @('/r:System.dll','/r:System.Drawing.dll','/r:System.Windows.Forms.dll')
@@ -144,8 +157,7 @@ $base  = @('/nologo','/target:winexe','/optimize+','/warnaserror-','/codepage:65
 if (Test-Path $ico) { $base += "/win32icon:$ico" }
 
 # 卸载程序也要 logo.ico,不然它的界面上没有图标。
-$legalResources = @($res | Where-Object { $_ -match ',legal\.' })
-& $csc @base @refs @legalResources '/define:UNINSTALLER' "/resource:$ico,logo.ico" "/out:$unin" $src
+& $csc @base @refs '/define:UNINSTALLER' "/resource:$ico,logo.ico" "/resource:$(Join-Path $root 'allegro/install.ps1'),allegro.install.ps1" "/out:$unin" @src
 if ($LASTEXITCODE -ne 0) { Die "卸载程序编译失败" }
 Ok ("uninstall.exe  {0:N0} 字节" -f (Get-Item $unin).Length)
 
@@ -154,7 +166,7 @@ Write-Host "`n[5/6] 编译安装包"
 $res += "/resource:$unin,uninstall.exe"
 $exe = Join-Path $here $installerName
 if (Test-Path $exe) { Remove-Item -LiteralPath $exe -Force }
-& $csc @base @refs @res "/out:$exe" $src
+& $csc @base @refs @res "/out:$exe" @src
 if ($LASTEXITCODE -ne 0) { Die "安装包编译失败" }
 if (-not (Test-Path $exe)) { Die "编完了但文件不在?" }
 Ok ("$installerName  {0:N1} MB" -f ((Get-Item $exe).Length / 1MB))
@@ -183,6 +195,7 @@ $greenFiles = @{
     'specgen.ico'           = 'specgen.ico'
     'jlc3d.exe'             = 'JLC3D-Downloader.exe'
     'jlc3d.ico'             = 'jlc3d.ico'
+    'markinglookup.exe'    = '常见丝印反查.exe'
     'startupoptimizer.exe' = 'OrCAD启动优化工具.exe'
 }
 foreach ($k in $greenFiles.Keys) {
@@ -209,6 +222,7 @@ $readme = @"
     元器件规格描述生成器.exe      按型号生成规范的元器件规格描述
     JLC3D-Downloader.exe        按编号批量下载封装的 3D 模型
     OrCAD启动优化工具.exe       按需停用启动功能，备份与恢复
+    常见丝印反查.exe             离线丝印反查，支持分类、封装筛选与复制
 
 想自己加别的软件快捷方式
     在主程序里点"添加其他软件"就行,它会写到 tools.local.ini。这个文件升级时
@@ -219,12 +233,25 @@ $readme = @"
     双击 DSN 使用 Capture 打开,双击 BRD 使用 Allegro 打开；Cadence 未加入
     Windows 最近项目的文件不会显示。
 
+固定外观
+    工具箱固定使用当前深蓝背景，OrCAD 为蓝白，Allegro 为黑红。
+    不再提供皮肤选择，也不再读取原有皮肤设置。安装升级后重启 Capture / Allegro。
+    A1、A2 辅助窗口使用黑红配色；其余原生 SKILL 工具窗口沿用原界面。
+
 OrCAD 原理图插件
-    Capture 插件图标位于 OrCAD 工具页下方，布局与“库与转换”的自研工具区一致。
-    安装版会自动安装立创EDA转OrCAD、BOM整理工具、Netlocator、DRC检查、文字前后缀及统一入口脚本。
+    AI 配置统一在主工具箱左下角「API KEY」；获取模型后下拉选择并保存。
+    OrCAD / Allegro 中按 Alt+K，点击「AI 命令辅助」描述完整要求。模型会选择并组合
+    已接入指令，执行每步后重新读取工程和原生结果，决定继续或结束，无需固定话术。
+    OrCAD支持独立导线创建、改名、移动、输入连接符、图纸点选、红色Text和定位；
+    Allegro支持定位和打开已有工具，工具内具体操作仍需手动完成。调用过程、结果和
+    失败原因显示在同一对话中；原生失败、工程切换或取消停止后续步骤。
+    Capture 插件位于 OrCAD 工具页右侧，按功能分类，单击分类展开或收起。
+    安装版会自动安装 Orcad内直接放置立创元件、BOM输出增强版、Signal一键全网络高亮、DRC中文增强版、任意位置批量前/后添加文字及统一入口脚本。
     首次安装前如有同名脚本会备份；升级仅替换工具箱管理的脚本。Capture 正在运行时
-    也会尝试更新，完成后请重启 Capture。原理图中按 Alt+K 打开编号功能集合。
-    绿色版不会自动更改 Capture；请使用安装版安装插件。
+    也会尝试更新，完成后请重启 Capture。原理图中按 Alt+K 打开分类功能集合。
+    安装版默认安装 Allegro SKILL：一键设置光绘与层叠颜色、过孔修改网络、悬空线／过孔／孤岛检查与处理。
+    Allegro 板图中按 Alt+K 使用；主工具箱的 Allegro 工具页右侧显示可展开的 SKILL 分类和说明。
+    绿色版不会自动更改 Capture / Allegro；请使用安装版安装插件。
     卸载安装版时默认保留插件，也可取消“保留 OrCAD 原理图插件”并删除，已备份的
     原文件会恢复。卸载后请重启 Capture。
 
@@ -246,8 +273,17 @@ netlocator 插件
 # UTF-8 带 BOM:记事本打开中文才不乱码(它对无 BOM 的 UTF-8 猜得不准)。
 $readme | Out-File -FilePath (Join-Path $green '使用说明.txt') -Encoding utf8
 
-Compress-Archive -Path "$green\*" -DestinationPath $zip -CompressionLevel Optimal
-Remove-Item -LiteralPath $green -Recurse -Force
+for ($archiveAttempt = 1; $archiveAttempt -le 3; $archiveAttempt++) {
+    try {
+        Compress-Archive -Path "$green\*" -DestinationPath $zip -CompressionLevel Optimal -Force -ErrorAction Stop
+        break
+    } catch {
+        if ($archiveAttempt -eq 3) { throw }
+        Start-Sleep -Seconds 2
+    }
+}
+try { Remove-Item -LiteralPath $green -Recurse -Force -ErrorAction Stop }
+catch { Warn "压缩包已生成，临时目录被占用，可稍后清理：$green" }
 Ok ("$portableName  {0:N1} MB" -f ((Get-Item $zip).Length / 1MB))
 
 Write-Host "`n两个产物都在 $here`n" -ForegroundColor Cyan

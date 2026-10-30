@@ -242,6 +242,7 @@ namespace OrCadStartup
         public MainForm()
         {
             Text = "OrCAD 启动优化工具"; Font = new Font("Microsoft YaHei UI", 9F);
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Size = new Size(1040, 710); MinimumSize = new Size(880, 620);
             StartPosition = FormStartPosition.CenterScreen;
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18), ColumnCount = 1, RowCount = 7 };

@@ -592,7 +592,7 @@ proc ::netloc::show {pNetName pHits} {
         bind $lForm <Return>   [list ::netloc::onRowActivate $lTree]
         bind $lForm <Escape>   [list wm withdraw $lForm]
     }
-    wm title $lForm "Locate net: $pNetName"
+    wm title $lForm "Signal\u4e00\u952e\u5168\u7f51\u7edc\u9ad8\u4eae: $pNetName"
 
     set lShowSchematic [netloc::showSchematicName $pHits]
     set lTree $lForm.results.tv

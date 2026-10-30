@@ -1,4 +1,3 @@
-set ::xkRepoRoot [file normalize [file join [file dirname [info script]] .. ..]]
 # SPDX-License-Identifier: GPL-3.0-only
 # Run only with symbol_probe.tcl's disposable sample active.
 proc xkSymbolAssert {condition message} {
@@ -11,12 +10,12 @@ proc xkSymbolSelect {objects} {
     update
 }
 proc xkSymbolSmoke {} {
-    source $::xkRepoRoot/autoload/textaffixMenu.tcl
+    source D:/selfsoftware/autoload/textaffixMenu.tcl
     set f $::xkSymbolLog
-    Open $::xkRepoRoot/toolbox/textaffix/test-output/symbols/symbols.opj
+    Open D:/selfsoftware/toolbox/textaffix/test-output/symbols/symbols.opj
     OPage FULLADD FULLADD {}
     set d [::xiaokai::textaffix::design]
-    set expected $::xkRepoRoot/toolbox/textaffix/test-output/symbols/symbols.dsn
+    set expected D:/selfsoftware/toolbox/textaffix/test-output/symbols/symbols.dsn
     xkSymbolAssert {[string equal -nocase [file normalize [xkSymbolValue $d]] [file normalize $expected]]} {Refusing to modify a non-fixture design}
     set page [GetActivePage]; set s [DboState]; set made {}
     try {
@@ -24,7 +23,7 @@ proc xkSymbolSmoke {} {
         set lib [$::DboSession_s_pDboSession GetLib $c $s]
         DboTclHelper_sDeleteCString $c
         # GetLib may make its library editor active; restore the fixture page.
-        Open $::xkRepoRoot/toolbox/textaffix/test-output/symbols/symbols.opj
+        Open D:/selfsoftware/toolbox/textaffix/test-output/symbols/symbols.opj
         OPage FULLADD FULLADD {}
         update
         foreach spec {

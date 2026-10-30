@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<defs>
+ <linearGradient id="base" x2="1" y2="0.7"><stop stop-color="#111B2B"/><stop offset="1" stop-color="#253D54"/></linearGradient>
+ <radialGradient id="bloom"><stop stop-color="#84BCD9" stop-opacity=".10"/><stop offset="1" stop-color="#84BCD9" stop-opacity="0"/></radialGradient>
+ <linearGradient id="fade"><stop stop-color="white" stop-opacity="0"/><stop offset=".65" stop-color="white" stop-opacity=".2"/><stop offset="1" stop-color="white"/></linearGradient>
+ <mask id="edge"><rect width="1600" height="1000" fill="url(#fade)"/></mask>
+ <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#4D6B87" stroke-width=".7" opacity=".18"/></pattern>
+ <pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".8" fill="#4D6B87" opacity=".24"/></pattern>
+</defs>
+<rect width="1600" height="1000" fill="url(#base)"/>
+<ellipse cx="1450" cy="160" rx="760" ry="600" fill="url(#bloom)"/>
+<ellipse cx="1000" cy="1000" rx="900" ry="470" fill="url(#bloom)"/>
+<rect width="1600" height="1000" fill="url(#dots)" mask="url(#edge)" opacity=".45"/>
+<g fill="none" stroke="#4D6B87" stroke-width="1" opacity=".20">
+<path d="M950 -80C770 220 1690 240 1300 700S1050 1050 1690 1080"/>
+<path d="M974 -80C795 220 1706 240 1322 700S1076 1050 1708 1080"/>
+<path d="M998 -80C820 220 1722 240 1344 700S1102 1050 1726 1080"/>
+<path d="M1022 -80C845 220 1738 240 1366 700S1128 1050 1744 1080"/>
+<path d="M1046 -80C870 220 1754 240 1388 700S1154 1050 1762 1080"/>
+<path d="M1070 -80C895 220 1770 240 1410 700S1180 1050 1780 1080"/>
+<path d="M1094 -80C920 220 1786 240 1432 700S1206 1050 1798 1080"/>
+<path d="M1118 -80C945 220 1802 240 1454 700S1232 1050 1816 1080"/>
+<path d="M1142 -80C970 220 1818 240 1476 700S1258 1050 1834 1080"/>
+<path d="M1166 -80C995 220 1834 240 1498 700S1284 1050 1852 1080"/>
+<path d="M1190 -80C1020 220 1850 240 1520 700S1310 1050 1870 1080"/>
+<path d="M1214 -80C1045 220 1866 240 1542 700S1336 1050 1888 1080"/>
+</g>
+<path d="M1450 -40C1160 230 1640 370 1400 670S1310 1020 1660 1050" fill="none" stroke="#84BCD9" stroke-width="2" opacity=".36"/>
+<path d="M1490 -40C1200 230 1680 370 1440 670S1350 1020 1700 1050" fill="none" stroke="#84BCD9" stroke-width="22" opacity=".025"/>
+<path d="M36 56V36H56M1544 36h20v20M36 944v20h20M1544 964h20v-20" fill="none" stroke="#4D6B87" opacity=".32"/>
+</svg>

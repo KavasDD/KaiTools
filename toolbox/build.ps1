@@ -11,6 +11,7 @@ param(
     [switch]$Test
 )
 $ErrorActionPreference = 'Stop'
+if (-not $env:XIAOKAI_BUILD_PYTHON) { $env:XIAOKAI_BUILD_PYTHON = (Get-Command python -ErrorAction Stop).Source }
 
 $src  = Join-Path $Root 'Toolbox.cs'
 $ini  = Join-Path $Root 'tools.ini'
@@ -42,11 +43,21 @@ if (-not (Test-Path $csc)) { throw 'csc.exe not found - .NET Framework 4.x missi
 # /target:winexe 而不是 exe:否则双击会先弹一个黑色控制台窗口。
 $refs = @(
     '/r:System.dll'
+    '/r:System.Web.Extensions.dll'
     '/r:System.Drawing.dll'
     '/r:System.Windows.Forms.dll'
     '/r:System.IO.Compression.dll'
     '/r:System.IO.Compression.FileSystem.dll'
 )
+$skinSource = Join-Path $Root 'WindowSkins.cs'
+& $env:XIAOKAI_BUILD_PYTHON (Join-Path $Root 'drc/build.py')
+if ($LASTEXITCODE) { throw 'AI bridge build failed' }
+$skinResources = @()
+foreach ($skinId in @('toolbox-b','orcad-a','allegro-a')) {
+    $skinFile = Join-Path $Root "design/window-backgrounds-v1/$skinId.png"
+    if (-not (Test-Path -LiteralPath $skinFile)) { throw "Missing skin artwork: $skinId" }
+    $skinResources += "/resource:$skinFile,skin.$skinId.png"
+}
 $args = @(
     '/nologo'
     '/target:winexe'
@@ -54,7 +65,7 @@ $args = @(
     '/codepage:65001'
     '/warnaserror-'
     "/out:$exe"
-) + $refs + @($src)
+) + $refs + $skinResources + @("/resource:$(Join-Path $Root 'drc/test-output/xiaokaiAiBridge.exe'),xiaokai.ai.bridge", $src, $skinSource, (Join-Path $Root 'allegro/AllegroSkillFiles.cs'))
 
 # 图标可以没有 —— 缺了只是变成默认的空白 exe 图标,不该让整个构建失败。
 # 生成方式见 make-icon.ps1。
@@ -109,9 +120,13 @@ if (Test-Path $specgen) {
     Write-Warning "元器件规格描述生成器.exe not found - build it in selfsoftware2 (python tools\build_exe.py); that entry will show as unavailable"
 }
 
+# Offline marking lookup; its TSV catalog is embedded in the executable.
+& ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $Root 'markinglookup/build.ps1')))) -Root (Join-Path $Root 'markinglookup') -OutputDirectory $out -Test:$Test
+
 # Standalone startup manager, included in the auxiliary tools category.
 $startupSrc = Join-Path $Root 'startupoptimizer\StartupOptimizer.cs'
 $startupArgs = @('/nologo','/target:winexe','/optimize+','/codepage:65001',
+    "/win32icon:$(Join-Path $Root 'startupoptimizer.ico')",
     "/out:$(Join-Path $out 'OrCAD启动优化工具.exe')",
     '/r:System.Core.dll','/r:System.Xml.dll','/r:System.Xml.Linq.dll') + $refs + @($startupSrc)
 & $csc @startupArgs
@@ -142,7 +157,7 @@ if ($Test) {
         '/warnaserror-'
         '/main:CadenceToolbox.SelfTest'
         "/out:$texe"
-    ) + $refs + @($src, $tsrc)
+    ) + $refs + $skinResources + @($src, $skinSource, $tsrc, (Join-Path $Root 'allegro/AllegroSkillFiles.cs'))
     Write-Host ""
     Write-Host "running self-test ..."
     & $csc @targs
@@ -153,8 +168,8 @@ if ($Test) {
     Remove-Item $texe -Force -ErrorAction SilentlyContinue
     $layoutExe = Join-Path $out 'LayoutTest.exe'
     $layoutArgs = @('/nologo', '/target:exe', '/codepage:65001',
-        '/main:CadenceToolbox.LayoutTest', "/out:$layoutExe") + $refs + @(
-        $src, (Join-Path $Root 'LayoutTest.cs'))
+        '/main:CadenceToolbox.LayoutTest', "/out:$layoutExe") + $refs + $skinResources + @(
+        $src, $skinSource, (Join-Path $Root 'LayoutTest.cs'), (Join-Path $Root 'allegro/AllegroSkillFiles.cs'))
     & $csc @layoutArgs
     if ($LASTEXITCODE -ne 0) { throw 'layout test build failed' }
     & $layoutExe
@@ -162,6 +177,16 @@ if ($Test) {
     Remove-Item -LiteralPath $layoutExe -Force -ErrorAction SilentlyContinue
     if ($layoutResult -ne 0) { throw "layout test failed with exit code $layoutResult" }
     if ($rc -ne 0) { throw "self-test failed with exit code $rc" }
+    $skinTestExe = Join-Path $out 'SkinChecks.exe'
+    $skinTestArgs = @('/nologo','/target:exe','/codepage:65001',
+        '/main:CadenceToolbox.SkinChecks', "/out:$skinTestExe") + $refs + $skinResources + @(
+        $src, $skinSource, (Join-Path $Root 'SkinChecks.cs'),
+        (Join-Path $Root 'allegro/AllegroSkillFiles.cs'), (Join-Path $Root 'allegro/src/AllegroHotkey.cs'))
+    & $csc @skinTestArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Appearance check compile failed' }
+    & $skinTestExe
+    if ($LASTEXITCODE -ne 0) { throw 'Appearance checks failed' }
+    Remove-Item -LiteralPath $skinTestExe -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host ""

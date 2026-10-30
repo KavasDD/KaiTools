@@ -1,9 +1,8 @@
-set ::xkRepoRoot [file normalize [file join [file dirname [info script]] .. ..]]
 # SPDX-License-Identifier: GPL-3.0-only
 # Run only against the disposable FULLADD sample opened by test-output/pump.tcl.
 proc ::xkTextAffixSmoke {} {
     set f $::xkProbeLog
-    source $::xkRepoRoot/autoload/textaffixMenu.tcl
+    source D:/selfsoftware/autoload/textaffixMenu.tcl
     ::xiaokai::textaffix::hide
     set s [DboState]
     try {

@@ -28,7 +28,7 @@ proc ::xiaokai::textaffix::show {} {
     set w .xiaokaiTextAffix
     if {[winfo exists $w]} {wm deiconify $w; raise $w; start; return}
     if {[catch {package require capAppUtils}]} {toplevel $w} else {capAppUtils::capTopLevel $w}
-    wm title $w "文字前后缀"
+    wm title $w "任意位置批量前/后添加文字"
     wm resizable $w 0 0
     wm attributes $w -topmost 1
     ttk::label $w.label -text "添加文字"

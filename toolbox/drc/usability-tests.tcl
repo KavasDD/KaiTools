@@ -37,12 +37,28 @@ proc OPage {args} {set ::opened $args}
 proc UnSelectAll {} {set ::selected {}}
 proc SelectObjectById {id} {lappend ::selected $id}
 proc GetActivePage {} {return page}
-proc page {method args} {if {$method eq "GetPhysicalGranularity"} {return 100}; error $method}
+proc page {method args} {if {$method eq "GetPhysicalGranularity"} {return $::pageScale}; error $method}
 proc ZoomArea {args} {set ::area $args}
-set state current
+set state current; set pageScale 100
 ${ns}::locate $a {source D:/live.dsn}
 assert {$selected eq "11" && $opened eq {CHILD PAGE A}}
-assert {$area eq {305 145 395 235}}
+assert {$area eq {3.05 1.45 3.95 2.35}}
+# The same physical position under a different document scale must centre at
+# the same user coordinate, rather than clamping the viewport to the edge.
+set pageScale 1000
+${ns}::locate [dict replace $a _focus_point {3500 1900}] {source D:/live.dsn}
+assert {$area eq {3.05 1.45 3.95 2.35}}
+# Coordinate-only native diagnostics take the same conversion path; wire
+# lookup still receives document coordinates.
+rename ${ns}::selectWireAt ${ns}::realSelectWireAt
+proc ${ns}::selectWireAt {page x y tolerance} {set ::wirePoint [list $x $y]}
+${ns}::locate [dict replace $a _focus_point {} _targets {}] {source D:/live.dsn}
+assert {$wirePoint eq {3500 1900} && $area eq {3.2 1.6 3.8 2.2}}
+foreach pageScale {0 -1 Inf NaN invalid} {
+    set area unchanged
+    assert {[catch {${ns}::zoomDocumentPoint page 350 190 45}] && $area eq "unchanged"}
+}
+set pageScale 100
 set state stale; set opened {}
 assert {[catch {${ns}::locate $a {source D:/live.dsn}}] && $opened eq {}}
 rename ${ns}::resultState {}
@@ -72,4 +88,4 @@ assert {[${ns}::resultState $checked] eq "stale"}
 file delete $designPath
 assert {[${ns}::resultState $checked] eq "stale"}
 puts "PASS: unchanged, unsaved edits, reopened design, project switching, saved edits and moved source"
-puts "PASS: object-specific Chinese, related sources retained, instance/point isolation, no-location detection, exact pin zoom, stale navigation blocked"
+puts "PASS: object-specific Chinese, instance/point isolation, document-to-user zoom across scales, report-only wire coordinates, invalid scale blocked, stale navigation blocked"

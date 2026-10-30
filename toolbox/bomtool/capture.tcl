@@ -255,7 +255,7 @@ proc ::bomtool::runUI {action} {
             append message "\n\n注意：[get $result pending_packages] 个位号的分部属性冲突，暂未计入合并BOM。请查看Excel的告警及过滤清单，核对后再用于采购。"
             set icon warning
         }
-        tk_messageBox -title "BOM整理工具" -icon $icon -message $message
+        tk_messageBox -title "BOM输出增强版" -icon $icon -message $message
     } err options]} {
         if {[get $options -code] == 0} { return }
         puts "BOM Workbench ERROR: $err"
@@ -283,7 +283,7 @@ proc ::bomtool::dialog {args} {
     set w .bomworkbench
     if {[winfo exists $w]} { showWindow $w; return }
     try {
-    toplevel $w; wm title $w "BOM整理工具 $::bomtool::version - Capture CIS"
+    toplevel $w; wm title $w "BOM输出增强版 $::bomtool::version - Capture CIS"
     label $w.title -text "读取当前原理图 → 按七列生成原生BOM → 整理为Excel" -padx 18 -pady 12
     pack $w.title
     foreach {id label action} [list export "自动生成并整理BOM" export a "导入已有TXT/CSV（可选）" A] {

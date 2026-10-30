@@ -21,6 +21,44 @@ proc ::xiaokai::drc::activeDesign {} {
     if {$design eq "NULL" || $design eq ""} {error "请先打开原理图设计。"}
     return $design
 }
+proc ::xiaokai::drc::componentProperty {occ inst names} {
+    foreach name $names {
+        set key [DboTclHelper_sMakeCString $name]; set value [DboTclHelper_sMakeCString]
+        try {
+            foreach object [list $occ $inst] {
+                if {$object eq "NULL" || $object eq ""} {continue}
+                if {![catch {$object IsVariantPropMapEmpty} empty] && !$empty && [$object GetVariantProp $key $value]} {
+                    return [string trim [DboTclHelper_sGetConstCharPtr $value]]
+                }
+            }
+            set status [$occ GetEffectivePropStringValue $key $value]
+            try {
+                if {[$status OK]} {
+                    set text [string trim [DboTclHelper_sGetConstCharPtr $value]]
+                    if {$text ne ""} {return $text}
+                }
+            } finally {$status -delete}
+        } finally {DboTclHelper_sDeleteCString $key; DboTclHelper_sDeleteCString $value}
+    }
+    return ""
+}
+proc ::xiaokai::drc::componentInfo {occ inst} {
+    set info {}
+    foreach {field names} {
+        part_number {{Manufacturer Part Number} {Manufacturer Part} MPN {Part Number} Value}
+        manufacturer {Manufacturer {Manufacturer Name} Brand}
+        footprint {{PCB Footprint} Package}
+        datasheet_url {Datasheet {Data Sheet} DATASHEET {Datasheet URL}}
+        lcsc {{LCSC Part Number} LCSC {LCSC Part} {Supplier Part}}
+    } {dict set info $field [componentProperty $occ $inst $names]}
+    # Imported symbols sometimes append their LCSC code to the actual model.
+    set model [get $info part_number]
+    if {[regexp -nocase {^(.+)_((?:C)[0-9]{3,10})$} $model -> model code]} {
+        dict set info part_number $model
+        if {[get $info lcsc] eq ""} {dict set info lcsc [string toupper $code]}
+    }
+    return $info
+}
 proc ::xiaokai::drc::walk {parent contextsName pinsName} {
     upvar 1 $contextsName contexts $pinsName pins
     set s [DboState]; set it NULL
@@ -47,6 +85,7 @@ proc ::xiaokai::drc::walk {parent contextsName pinsName} {
             set inst [$occ GetPartInst $s]
             set page [$inst GetOwner]
             set ref [cstring $occ GetReferenceDesignator]
+            set component [componentInfo $occ $inst]
             set pi [$inst NewPinsIter $s]
             try {
                 set pin [$pi NextPin $s]
@@ -56,6 +95,9 @@ proc ::xiaokai::drc::walk {parent contextsName pinsName} {
                         pin_number [cstring $pin GetPinNumber 1] pin_type [$pin GetPinType $s] \
                         net_name "" local_net "" flat_net "" is_power 0 is_primitive $primitive _part_id [$inst GetId $s]]
                     dict set p _pin_id [$pin GetId $s]
+                    set nc unknown
+                    if {![catch {$pin GetIsNoConnect $s} nativeNc] && $nativeNc in {0 1}} {set nc $nativeNc}
+                    set p [dict merge $p $component [dict create no_connect $nc]]
                     set point [$pin GetOffsetHotSpot $s]
                     try {dict set p _pin_point [list [DboTclHelper_sGetCPointX $point] [DboTclHelper_sGetCPointY $point]]} finally {DboTclHelper_sDeleteCPoint $point}
                     if {[info exists ::DboValue_POWER]} {dict set p is_power [expr {[$pin GetPinType $s] == $::DboValue_POWER}]}
@@ -280,6 +322,15 @@ proc ::xiaokai::drc::nativePass {config report} {
         set commandFile [file tempfile commandPath xiaokai-drc-XXXXXX.tcl]
         puts $commandFile {Menu "PCB::Design Rules Check" | MessageBox "YES" "One or more errors or warnings were encountered."}
         close $commandFile; set commandFile ""
+        # Some Capture builds still show ORCAP-1805 despite native replay.
+        # The fallback is scoped to this PID, this command's lifetime and the
+        # exact log-summary question. It cannot answer other dialogs.
+        if {[llength [info commands ::xiaokai::drc::aiHelper]]} {
+            exec [aiHelper] --drc-yes [pid] $commandPath >NUL 2>NUL &
+            set deadline [expr {[clock milliseconds]+3000}]
+            while {![file exists $commandPath.ready] && [clock milliseconds] < $deadline} {after 25}
+            if {![file exists $commandPath.ready]} {error "DRC 自动应答程序未能启动，请重试。"}
+        }
         TclScript $commandPath
         if {$configCalls != 1} {error "Capture 未执行 DRC 配置回调；请激活设计后重试。"}
         if {![file exists $report] || [file size $report] == 0} {error "Capture 未生成本次原生 DRC 报告：$report"}
@@ -287,6 +338,8 @@ proc ::xiaokai::drc::nativePass {config report} {
         try {
             if {$commandFile ne ""} {close $commandFile}
             if {$commandPath ne "" && [file exists $commandPath]} {file delete $commandPath}
+            if {$commandPath ne "" && [file exists $commandPath.ready]} {file delete $commandPath.ready}
+            if {$commandPath ne "" && [file exists $commandPath.answered]} {file delete $commandPath.answered}
         } finally {
             try {
                 rename $hook {}
@@ -381,6 +434,14 @@ proc ::xiaokai::drc::run {{parent ""} {whitelist {}}} {
     }
     # Running a check explicitly includes saving the current design. Save via
     # the native writer before Batch DRC, then persist marker cleanup as well.
+    # A new check expires earlier confirmations. Immediate verification after
+    # creating Text retains it until the comparison finishes.
+    if {[llength [info commands ::xiaokai::drc::reviewRemove]] &&
+        [llength [info commands DboGraphicInstanceToDboGraphicCommentTextInst]] &&
+        !$::xiaokai::drc::reviewMutating} {
+        reviewRemove $design
+        set ::xiaokai::drc::reviewVisible 0
+    }
     saveCurrentDesign $design
     set result [checkCurrent $design $project $parent $whitelist $rawConfig]
     # Netlist failures must retain completed DRC results.
@@ -418,6 +479,7 @@ proc ::xiaokai::drc::run {{parent ""} {whitelist {}}} {
     # PST can update native cached properties and mark the design modified.
     # Save those updates too, then record the final revision for navigation.
     saveCurrentDesign $design
+    dict set result review_contexts [dict get $result _model contexts]
     dict unset result _model
     dict set result source $source
     dict set result source_time ""
@@ -473,6 +535,17 @@ proc ::xiaokai::drc::resultState {result} {
     return current
 }
 proc drctoolMenuRun {args} {::xiaokai::drc::start; return 1}
+proc ::xiaokai::drc::zoomDocumentPoint {page x y radius} {
+    # Dbo CPoint values use document units. Capture UI commands (ZoomArea)
+    # use user units, as in Cadence's ConvertDocToUser sample. Sending raw
+    # points pushes the viewport beyond the page and clamps it to a corner.
+    set scale [$page GetPhysicalGranularity]
+    if {![string is double -strict $scale] || !($scale > 0 && $scale < Inf)} {
+        error "无法读取图纸坐标比例，已停止缩放。"
+    }
+    ZoomArea [expr {($x-$radius)/double($scale)}] [expr {($y-$radius)/double($scale)}] \
+        [expr {($x+$radius)/double($scale)}] [expr {($y+$radius)/double($scale)}]
+}
 proc ::xiaokai::drc::locate {row result} {
     if {[resultState $result] eq "stale"} {error "设计已修改，结果待更新。请重新检查后定位。"}
     set source [dict get $result source]
@@ -511,7 +584,7 @@ proc ::xiaokai::drc::locate {row result} {
     if {[get $row _focus_point] ne ""} {
         lassign [dict get $row _focus_point] x y
         set radius [expr {max(20,int([[GetActivePage] GetPhysicalGranularity]*0.45))}]
-        ZoomArea [expr {$x-$radius}] [expr {$y-$radius}] [expr {$x+$radius}] [expr {$y+$radius}]
+        zoomDocumentPoint [GetActivePage] $x $y $radius
         return
     }
     if {$count} {ZoomSelection; return}
@@ -523,7 +596,7 @@ proc ::xiaokai::drc::locate {row result} {
         set x [expr {int(round($x * $scale))}]; set y [expr {int(round($y * $scale))}]
         selectWireAt $active $x $y [expr {max(1,int($scale*0.03))}]
         set radius [expr {int($scale * 0.3)}]
-        ZoomArea [expr {$x-$radius}] [expr {$y-$radius}] [expr {$x+$radius}] [expr {$y+$radius}]
+        zoomDocumentPoint $active $x $y $radius
         return
     }
     error "已打开图纸；原生诊断未提供可定位对象或坐标。"
