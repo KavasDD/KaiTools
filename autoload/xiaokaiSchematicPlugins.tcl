@@ -2,7 +2,7 @@
 namespace eval ::xiaokai::schematicPlugins {
     variable actions [dict create \
         lceda_clip lceda2orcadMenuFromClip \
-        lceda_number lceda2orcadMenuDialog \
+        lceda_number xiaokaiSchematicPluginsInlineFocus \
         lceda_clear lceda2orcadMenuClearOlb \
         netloc_page ::netloc::menuRun \
         netloc_sheet netlocSelectEntireNet \
@@ -25,6 +25,8 @@ namespace eval ::xiaokai::schematicPlugins {
         bom_export "\u81ea\u52a8\u8bfb\u53d6\u5f53\u524d\u539f\u7406\u56fe\uff0c\u751f\u6210\u539f\u751f BOM \u5e76\u81ea\u52a8\u6574\u7406\u4e3a Excel \u5de5\u4f5c\u7c3f\u3002"]
 }
 
+dict set ::xiaokai::schematicPlugins::descriptions lceda_number "\u5728\u4e0b\u65b9\u76f4\u63a5\u8f93\u5165\u7acb\u521b\u7f16\u53f7\u5e76\u6309\u56de\u8f66\u6dfb\u52a0\uff1b\u6210\u529f\u540e\u6e05\u7a7a\u8f93\u5165\u6846\uff0c\u53ef\u7ee7\u7eed\u6dfb\u52a0\u4e0b\u4e00\u9897\u3002"
+
 dict set ::xiaokai::schematicPlugins::descriptions textaffix "\u5355\u51fb\u6216\u6846\u9009\u5c5e\u6027\u3001\u5bfc\u7ebf\u5373\u53ef\u5904\u7406\uff1b\u5df2\u6709\u76f8\u540c\u524d\u540e\u7f00\u65f6\u53ef\u53bb\u6389\u3002\u9ed8\u8ba4\u8fde\u7eed\u5904\u7406\uff0cEsc \u505c\u6b62\u5e76\u5173\u95ed\u3002"
 
 proc xiaokaiSchematicPluginsEnabled {args} { return true }
@@ -45,6 +47,24 @@ proc xiaokaiSchematicPluginsUpdateSelection {args} {
         }
     }
     $w.desc configure -text $description
+    if {$item eq "lceda_number"} {
+        grid $w.number -row 2 -column 0 -columnspan 2 -sticky we -padx 14 -pady 6
+        focus $w.number.in
+    } else {grid remove $w.number}
+}
+
+proc xiaokaiSchematicPluginsInlineFocus {args} {
+    set w .xiaokaiSchematicPlugins
+    if {[winfo exists $w.number.in]} {focus $w.number.in}
+}
+proc xiaokaiSchematicPluginsInlineAdd {} {
+    set w .xiaokaiSchematicPlugins
+    if {![llength [info commands lceda2orcadDialogRun]]} {
+        puts "LCEDA plugin is unavailable; restart Capture."
+        return
+    }
+    lceda2orcadDialogRun
+    if {[string match "\u5df2\u6dfb\u52a0*" $::lceda2orcadStatus]} {set ::lceda2orcadEntry ""}
 }
 
 proc xiaokaiSchematicPluginsRun {args} {
@@ -252,10 +272,27 @@ proc xiaokaiSchematicPluginsOpen {args} {
         }
         grid $w.ai -row 0 -column 1 -sticky e -padx 14 -pady {14 4}
         grid $w.results -row 1 -column 0 -columnspan 2 -sticky nsew -padx 14 -pady 4
-        grid $w.desc -row 2 -column 0 -columnspan 2 -sticky we -padx 14 -pady {8 4}
-        grid $w.hint -row 3 -column 0 -columnspan 2 -sticky w -padx 14 -pady {4 10}
-        grid $w.run -row 4 -column 0 -sticky e -padx 14 -pady {0 14}
-        grid $w.close -row 4 -column 1 -sticky e -padx {0 14} -pady {0 14}
+        ttk::frame $w.number
+        ttk::label $w.number.label -text "\u7acb\u521b\u7f16\u53f7\uff1a"
+        ttk::entry $w.number.in -textvariable ::lceda2orcadEntry -width 20
+        ttk::combobox $w.number.unit -textvariable ::lceda2orcadUnit -state readonly -width 6 -values [list "\u81ea\u52a8"] -postcommand {
+            if {[llength [info commands lceda2orcadRefreshUnits]]} {lceda2orcadRefreshUnits 1}
+        }
+        if {[llength [info commands lceda2orcadRefreshUnits]]} {lceda2orcadRefreshUnits}
+        ttk::button $w.number.add -text "\u6dfb\u52a0" -command xiaokaiSchematicPluginsInlineAdd
+        ttk::label $w.number.status -textvariable ::lceda2orcadStatus -wraplength 550
+        grid $w.number.label -row 0 -column 0 -sticky w
+        grid $w.number.in -row 0 -column 1 -sticky we -padx 6
+        grid $w.number.unit -row 0 -column 2 -padx 6
+        grid $w.number.add -row 0 -column 3
+        grid $w.number.status -row 1 -column 0 -columnspan 4 -sticky we -pady {5 0}
+        grid columnconfigure $w.number 1 -weight 1
+        bind $w.number.in <Return> {xiaokaiSchematicPluginsInlineAdd; break}
+        bind $w.number.in <KP_Enter> {xiaokaiSchematicPluginsInlineAdd; break}
+        grid $w.desc -row 3 -column 0 -columnspan 2 -sticky we -padx 14 -pady {8 4}
+        grid $w.hint -row 4 -column 0 -columnspan 2 -sticky w -padx 14 -pady {4 10}
+        grid $w.run -row 5 -column 0 -sticky e -padx 14 -pady {0 14}
+        grid $w.close -row 5 -column 1 -sticky e -padx {0 14} -pady {0 14}
 
         grid rowconfigure $w 1 -weight 1
         grid columnconfigure $w 0 -weight 1

@@ -483,6 +483,54 @@ proc lceda::pinCompare {pA pB} {
 
 # result dict (from lceda::resultOf) to symbol IR, translated to the origin.
 proc lceda::parseSymbol {pResult} {
+    set sym [lceda::parseUnit $pResult]
+    set sections {}
+    foreach child [lceda::dictOr $pResult subparts] {
+        set unit [lceda::parseUnit $child]
+        foreach key {lcsc prefix footprint manufacturer mfrPart} {dict set unit $key [dict get $sym $key]}
+        if {![llength [dict get $unit pins]]} {error "empty subpart: [dict get $unit name]"}
+        lappend sections $unit
+    }
+    if {[llength $sections]} {
+        dict set sym sections $sections
+        # A new cache identity prevents a previously placed empty single-unit
+        # symbol from shadowing the corrected multi-unit library definition.
+        dict set sym valueName [dict get $sym name]
+        dict set sym name "[dict get $sym name]_[dict get $sym lcsc]"
+    }
+    if {![llength [dict get $sym pins]] && ![llength $sections]} {error "symbol has no pins or subparts"}
+    return $sym
+}
+
+# PT paths are symbol graphics, including filled protection diodes.
+proc lceda::parseGraphicPath {path ox oy} {
+    set tokens [regexp -all -inline {[A-Za-z]|[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?[0-9]*)(?:[eE][-+]?[0-9]+)?} $path]
+    set result {};set points {};set x 0.0;set y 0.0;set cmd {};set i 0
+    while {$i < [llength $tokens]} {
+        if {[regexp {^[A-Za-z]$} [lindex $tokens $i]]} {set cmd [lindex $tokens $i];incr i}
+        set upper [string toupper $cmd];set relative [string is lower $cmd]
+        if {$upper eq "Z"} {
+            if {[llength $points]} {lappend points [lindex $points 0];lappend result $points;set points {}}
+            set cmd {};continue
+        }
+        set count [expr {$upper in {M L} ? 2 : $upper in {H V} ? 1 : 0}]
+        if {!$count || $i+$count > [llength $tokens]} {error "unsupported symbol path command: $cmd"}
+        set values [lrange $tokens $i [expr {$i+$count-1}]];incr i $count
+        foreach value $values {if {![string is double -strict $value]} {error "incomplete symbol path"}}
+        if {$upper eq "M" && [llength $points]} {lappend result $points;set points {}}
+        switch $upper {
+            M - L {set x [expr {[lindex $values 0]+($relative?$x:0)}];set y [expr {[lindex $values 1]+($relative?$y:0)}]}
+            H {set x [expr {[lindex $values 0]+($relative?$x:0)}]}
+            V {set y [expr {[lindex $values 0]+($relative?$y:0)}]}
+        }
+        lappend points [list [expr {$x-$ox}] [expr {$y-$oy}]]
+        if {$upper eq "M"} {set cmd [expr {$relative?"l":"L"}]}
+    }
+    if {[llength $points]} {lappend result $points}
+    return $result
+}
+
+proc lceda::parseUnit {pResult} {
     set lData [lceda::dictOr $pResult dataStr]
     set lHead [lceda::dictOr $lData head]
     set lPara [lceda::dictOr $lHead c_para]
@@ -501,7 +549,7 @@ proc lceda::parseSymbol {pResult} {
         footprint [lceda::sanitizeFootprint [lceda::dictOr $lPara package]] \
         manufacturer [lceda::dictOr $lPara Manufacturer] \
         mfrPart [lceda::dictOr $lPara "Manufacturer Part"] \
-        pins {} rects {} polylines {} skipped {}]
+        pins {} rects {} polylines {} polygons {} texts {} skipped {}]
 
     foreach lRaw [lceda::dictOr $lData shape] {
         set lKind [lindex [split $lRaw "~"] 0]
@@ -544,11 +592,60 @@ proc lceda::parseSymbol {pResult} {
             if {[llength $lPts] >= 2} {
                 dict lappend lSym polylines [dict create points $lPts]
             }
-        } elseif {$lKind in {E T A PT PI}} {
+        } elseif {$lKind eq "E"} {
+            set f [split $lRaw ~]
+            if {[llength $f] < 5} {error "invalid ellipse"}
+            set points {}
+            set rx [lceda::num [lindex $f 3]]; set ry [lceda::num [lindex $f 4]]
+            set count [expr {max(24,min(360,int(ceil(6.28318530718*max($rx,$ry)/0.75))))}]
+            for {set i 0} {$i <= $count} {incr i} {
+                set a [expr {6.28318530718*$i/$count}]
+                lappend points [list [expr {[lceda::num [lindex $f 1]]-$lOx+$rx*cos($a)}] [expr {[lceda::num [lindex $f 2]]-$lOy+$ry*sin($a)}]]
+            }
+            dict lappend lSym polylines [dict create points $points]
+        } elseif {$lKind eq "T"} {
+            set f [split $lRaw ~]
+            if {[llength $f] > 13 && [lindex $f 13] eq "1" && [lindex $f 11] eq "comment"} {
+                dict lappend lSym texts [dict create x [expr {[lceda::num [lindex $f 2]]-$lOx}] y [expr {[lceda::num [lindex $f 3]]-$lOy}] text [lindex $f 12] size [lceda::num [string trimright [lindex $f 7] pt]]]
+            }
+        } elseif {$lKind eq "PT"} {
+            set f [split $lRaw ~]
+            if {[catch {lceda::parseGraphicPath [lindex $f 1] $lOx $lOy} paths]} {
+                dict lappend lSym skipped "PT: $paths"
+            } else {
+                foreach points $paths {
+                    if {[llength $points] >= 3} {dict lappend lSym polygons [dict create points $points filled [expr {[lindex $f 5] ni {none ""}}]]}
+                }
+            }
+        } elseif {$lKind in {A PI}} {
+            dict lappend lSym skipped $lKind
+        } else {
             dict lappend lSym skipped $lKind
         }
     }
 
+    # Preserve source artwork at its original size. Electrical connection
+    # points always belong outside the body, including ESD-array I/O pins.
+    set pins {}
+    foreach pin [dict get $lSym pins] {
+        set inside 0
+        foreach rect [dict get $lSym rects] {
+            set x [dict get $pin connX];set y [dict get $pin connY]
+            if {$x>[dict get $rect x] && $x<[dict get $rect x]+[dict get $rect width] && $y>[dict get $rect y] && $y<[dict get $rect y]+[dict get $rect height]} {set inside 1}
+        }
+        dict set pin sourceInternal $inside
+        if {$inside} {
+            # The source's short internal terminal stroke is artwork only.
+            dict lappend lSym polylines [dict create points [list [list [dict get $pin connX] [dict get $pin connY]] [list [dict get $pin bodyX] [dict get $pin bodyY]]]]
+            dict lappend lSym texts [dict create x [expr {[dict get $pin connX]+3}] y [expr {[dict get $pin connY]-4}] text [dict get $pin number] size 5]
+        }
+        lappend pins $pin
+    }
+    dict set lSym pins $pins
+    if {[llength [dict get $lSym polygons]]} {
+        dict set lSym valueName [dict get $lSym name]
+        dict set lSym name "[dict get $lSym name]_[dict get $lSym lcsc]_G4"
+    }
     dict set lSym pins [lsort -command lceda::pinCompare [dict get $lSym pins]]
     return $lSym
 }
@@ -767,6 +864,7 @@ proc lceda::attachPins {pSnappedVar pPins pBody} {
     lassign $pBody lX1 lY1 lX2 lY2
     set lEdge [dict create LEFT $lX1 RIGHT $lX2 TOP $lY1 BOTTOM $lY2]
     set lSign [dict create LEFT -1 RIGHT 1 TOP -1 BOTTOM 1]
+    set occupied [dict create]
     foreach p $pPins {
         set lNum [dict get $p number]
         if {![dict exists $lSnapped $lNum]} { continue }
@@ -775,6 +873,18 @@ proc lceda::attachPins {pSnappedVar pPins pBody} {
         lassign [dict get $lSnapped $lNum] lCx lCy lBx lBy
         set lE [dict get $lEdge $lSide]
         set lS [dict get $lSign $lSide]
+        # Distinct internal source columns may otherwise collapse onto the
+        # same external edge/row after attachment. Allocate separate rows.
+        set cross [expr {$lSide in {LEFT RIGHT} ? $lCy : $lCx}]
+        set preferred $cross;set step 0
+        while {[dict exists $occupied [list $lSide $cross]]} {
+            incr step
+            set delta [expr {int(ceil($step/2.0))*10*($step%2?1:-1)}]
+            set cross [expr {$preferred+$delta}]
+        }
+        dict set occupied [list $lSide $cross] 1
+        if {$lSide in {LEFT RIGHT}} {set lCy $cross} else {set lCx $cross}
+
         if {$lSide eq "LEFT" || $lSide eq "RIGHT"} {
             dict set lSnapped $lNum \
                 [list [expr {$lE + $lS * $PIN_LENGTH}] $lCy $lE $lCy]
@@ -832,7 +942,37 @@ proc lceda::buildLibXml {pSymbols {pOlbPath "lceda.olb"}} {
     return [list "[join $lOut \n]\n" $lReports]
 }
 
+proc lceda::sectionSuffix {index} {
+    set result ""
+    while {$index >= 0} {
+        set result "[format %c [expr {65+$index%26}]]$result"
+        set index [expr {$index/26-1}]
+    }
+    return $result
+}
 proc lceda::buildPackage {pSym pStamp pReportsVar} {
+    upvar 1 $pReportsVar reports
+    if {![dict exists $pSym sections]} {return [lceda::buildUnitPackage $pSym $pStamp reports]}
+    set name [dict get $pSym name]
+    set o [list "  <Package>"]
+    lappend o "    <Defn alphabeticNumbering=\"1\" isHomogeneous=\"0\" name=[lceda::quoteattr $name] pcbFootprint=[lceda::quoteattr [dict get $pSym footprint]] pcbLib=\"\" refdesPrefix=[lceda::quoteattr [lceda::refdesPrefix $pSym]] timestamp=\"$pStamp\" timezone=\"0\"/>"
+    set index 0; set unitReports {}; set total 0
+    foreach unit [dict get $pSym sections] {
+        dict set unit name "$name[lceda::sectionSuffix $index]"
+        dict set unit valueName [lceda::dictOr $pSym valueName $name]
+        set scratch {}
+        set unitXml [lceda::buildUnitPackage $unit $pStamp scratch]
+        lappend o {*}[lrange $unitXml 2 end-1]
+        lappend unitReports [dict get $scratch [dict get $unit lcsc]]
+        incr total [llength [dict get $unit pins]]
+        incr index
+    }
+    lappend o "  </Package>"
+    dict set reports [dict get $pSym lcsc] [dict create units $unitReports total $total sections $index translate {0 0} origin {0 0} renamed 0 moved 0 collisions {}]
+    return $o
+}
+
+proc lceda::buildUnitPackage {pSym pStamp pReportsVar} {
     variable GRID
     variable DEFAULT_PIN_TYPE
     upvar 1 $pReportsVar lReports
@@ -871,6 +1011,12 @@ proc lceda::buildPackage {pSym pStamp pReportsVar} {
             [lceda::floorG [expr {[dict get $r y] + $lTy}]] \
             [lceda::ceilG [expr {[dict get $r x] + [dict get $r width] + $lTx}]] \
             [lceda::ceilG [expr {[dict get $r y] + [dict get $r height] + $lTy}]]]
+    } elseif {[llength [dict get $pSym polylines]]} {
+        lassign [dict get $lReport translate] tx ty
+        set points {}
+        foreach poly [dict get $pSym polylines] {foreach pt [dict get $poly points] {lappend points [list [expr {[lindex $pt 0]+$tx}] [expr {[lindex $pt 1]+$ty}]]}}
+        set lBody [lceda::bbox $points]
+        set lBody [lmap value $lBody {expr {int(round($value))}}]
     } elseif {[dict size $lSnapped]} {
         set lBx {} ; set lBy {}
         dict for {k v} $lSnapped { lappend lBx [lindex $v 2] ; lappend lBy [lindex $v 3] }
@@ -885,7 +1031,30 @@ proc lceda::buildPackage {pSym pStamp pReportsVar} {
     # Attach the pins to the body edge first, then move the origin, so the offset
     # applies to the final coordinates.
     if {[llength $lBody]} {
-        lceda::attachPins lSnapped $lPins $lBody
+        if {[llength $lRects]} {
+            lceda::attachPins lSnapped $lPins $lBody
+            # Keep the source rectangle exact (to Capture integer precision).
+            # Only hotpoints are constrained to the external wiring grid.
+            set edges [dict create LEFT [expr {int(round([dict get $r x]+$lTx))}] RIGHT [expr {int(round([dict get $r x]+[dict get $r width]+$lTx))}] TOP [expr {int(round([dict get $r y]+$lTy))}] BOTTOM [expr {int(round([dict get $r y]+[dict get $r height]+$lTy))}]]
+            foreach pin $lPins {
+                set n [dict get $pin number];set side [dict get $pin side]
+                lassign [dict get $lSnapped $n] cx cy bx by
+                if {$side in {LEFT RIGHT}} {set bx [dict get $edges $side]} else {set by [dict get $edges $side]}
+                dict set lSnapped $n [list $cx $cy $bx $by]
+            }
+        } else {
+            # Preserve attachment to a triangle or other drawn outline. Only the
+            # external electrical connection points need the 100-mil grid.
+            lassign [dict get $lReport translate] tx ty
+            foreach pin $lPins {
+                set n [dict get $pin number]
+                lassign [dict get $lSnapped $n] cx cy bx by
+                set bx [expr {int(round([dict get $pin bodyX]+$tx))}]
+                set by [expr {int(round([dict get $pin bodyY]+$ty))}]
+                if {[dict get $pin side] in {LEFT RIGHT}} {set by $cy} else {set bx $cx}
+                dict set lSnapped $n [list $cx $cy $bx $by]
+            }
+        }
         set lOffx [expr {-[lindex $lBody 0]}]
         set lOffy [expr {-[lindex $lBody 1]}]
         if {$lOffx != 0 || $lOffy != 0} {
@@ -934,16 +1103,24 @@ proc lceda::buildPackage {pSym pStamp pReportsVar} {
     # Pin names on the top and bottom sides rotate 90 degrees with the pin; all
     # six packages in the stock Cadence libraries use 1.
     lappend o "        <IsPinNamesRotated><Defn val=\"1\"/></IsPinNamesRotated>"
-    lappend o "        <IsPinNamesVisible><Defn val=\"1\"/></IsPinNamesVisible>"
+    set namesVisible 0
+    foreach pin $lPins {if {[dict get $pin nameVisible]} {set namesVisible 1; break}}
+    lappend o "        <IsPinNamesVisible><Defn val=\"$namesVisible\"/></IsPinNamesVisible>"
     lappend o "        <ContentsLibName><Defn name=\"\"/></ContentsLibName>"
     lappend o "        <ContentsViewName><Defn name=\"\"/></ContentsViewName>"
     lappend o "        <ContentsViewType><Defn type=\"0\"/></ContentsViewType>"
-    lappend o "        <PartValue><Defn name=[lceda::quoteattr [dict get $pSym name]]/></PartValue>"
+    lappend o "        <PartValue><Defn name=[lceda::quoteattr [lceda::dictOr $pSym valueName [dict get $pSym name]]] /></PartValue>"
     lappend o "        <Reference><Defn name=[lceda::quoteattr [lceda::refdesPrefix $pSym]]/></Reference>"
 
     # Body outline as 4 Lines: Cadence never writes a Rect under NormalView.
-    if {[llength $lBody]} {
-        lassign $lBody x1 y1 x2 y2
+    if {[llength $lBody] && [llength $lRects]} {
+        set r [lindex $lRects 0]
+        lassign [dict get $lReport translate] tx ty
+        lassign [dict get $lReport origin] ox oy
+        set x1 [expr {int(round([dict get $r x]+$tx))+$ox}]
+        set y1 [expr {int(round([dict get $r y]+$ty))+$oy}]
+        set x2 [expr {int(round([dict get $r x]+[dict get $r width]+$tx))+$ox}]
+        set y2 [expr {int(round([dict get $r y]+[dict get $r height]+$ty))+$oy}]
         foreach lSeg [list [list $x1 $y1 $x2 $y1] [list $x2 $y1 $x2 $y2] \
                            [list $x2 $y2 $x1 $y2] [list $x1 $y2 $x1 $y1]] {
             lassign $lSeg lx1 ly1 lx2 ly2
@@ -960,8 +1137,8 @@ proc lceda::buildPackage {pSym pStamp pReportsVar} {
         set lPts {}
         foreach pt [dict get $lPoly points] {
             lappend lPts [list \
-                [expr {[lceda::snap [expr {[lindex $pt 0] + $lTx}]] + $lOx2}] \
-                [expr {[lceda::snap [expr {[lindex $pt 1] + $lTy}]] + $lOy2}]]
+                [expr {[expr {int(round([lindex $pt 0] + $lTx))}] + $lOx2}] \
+                [expr {[expr {int(round([lindex $pt 1] + $lTy))}] + $lOy2}]]
         }
         for {set i 0} {$i < [llength $lPts] - 1} {incr i} {
             lassign [lindex $lPts $i] px1 py1
@@ -971,6 +1148,28 @@ proc lceda::buildPackage {pSym pStamp pReportsVar} {
             lappend o "          <Defn lineStyle=\"0\" lineWidth=\"0\" x1=\"$px1\" x2=\"$px2\" y1=\"$py1\" y2=\"$py2\"/>"
             lappend o "        </Line>"
         }
+    }
+
+    foreach polygon [lceda::dictOr $pSym polygons] {
+        lappend o "        <Polygon>"
+        set fill [expr {[dict get $polygon filled] ? 0 : 1}]
+        lappend o "          <Defn fillStyle=\"$fill\" hatchStyle=\"0\" lineStyle=\"0\" lineWidth=\"0\"/>"
+        foreach pt [dict get $polygon points] {
+            set x [expr {int(round([lindex $pt 0]+$lTx))+$lOx2}];set y [expr {int(round([lindex $pt 1]+$lTy))+$lOy2}]
+            lappend o "          <PolygonPoint><Defn x=\"$x\" y=\"$y\"/></PolygonPoint>"
+        }
+        lappend o "        </Polygon>"
+    }
+
+    foreach text [lceda::dictOr $pSym texts] {
+        set x [expr {int(round([dict get $text x]+$lTx+$lOx2))}]
+        set y [expr {int(round([dict get $text y]+$lTy+$lOy2))}]
+        set value [dict get $text text]
+        set height [expr {max(5,min(30,int(round([dict get $text size]))))}]
+        set right [expr {$x+max(4,[string length $value]*$height/2)}]
+        set bottom [expr {$y+$height}]
+        lappend o "        <CommentText><Defn locX=\"$x\" locY=\"$y\" name=[lceda::quoteattr $value] textJustification=\"0\" x1=\"$x\" x2=\"$right\" y1=\"$y\" y2=\"$bottom\"/>"
+        lappend o "          <TextFont><Defn charset=\"0\" escapement=\"0\" height=\"-$height\" italic=\"0\" name=\"Arial\" orientation=\"0\" weight=\"400\" width=\"0\"/></TextFont></CommentText>"
     }
 
     set lIndex 0

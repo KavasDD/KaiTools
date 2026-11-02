@@ -76,12 +76,43 @@ proc ::bomtool::captureWalk {design parent rowsName} {
         $status -delete
     }
 }
+# Project Manager keeps the selected design when a modeless/Tk tool has focus.
+# Session.GetActiveDesign can legitimately return NULL in this situation.
+proc ::bomtool::captureDesign {session} {
+    if {[llength [info commands GetActivePMDesign]] &&
+        ![catch {GetActivePMDesign} design] && $design ni {NULL {}}} {
+        return $design
+    }
+    if {![catch {$session GetActiveDesign} design] && $design ni {NULL {}}} {
+        return $design
+    }
+    # Older/hotfix-specific Capture builds can have neither active-context API.
+    # A single loaded design is unambiguous; never guess with multiple designs.
+    set status [DboState]; set iter NULL; set designs {}
+    try {
+        if {![catch {$session NewDesignsIter $status} candidate] && $candidate ni {NULL {}}} {
+            set iter $candidate
+            while {1} {
+                set design [$iter NextDesign $status]
+                if {$design in {NULL {}}} {break}
+                lappend designs $design
+            }
+        }
+    } finally {
+        if {$iter ni {NULL {}} && [llength [info commands delete_DboSessionDesignsIter]]} {
+            delete_DboSessionDesignsIter $iter
+        }
+        $status -delete
+    }
+    if {[llength $designs] == 1} {return [lindex $designs 0]}
+    if {[llength $designs] > 1} {error "已打开多个设计，请先在 Capture 工程管理器中选中要导出 BOM 的 DSN，再运行本工具。"}
+    error "未识别到当前设计，请在 Capture 工程管理器中选中已打开的 DSN 或图纸后重试。"
+}
 proc ::bomtool::captureRows {} {
     if {![info exists ::DboSession_s_pDboSession]} { error "Run Export Active Design inside OrCAD Capture CIS 17.4." }
     set session $::DboSession_s_pDboSession
     DboSession -this $session
-    set design [$session GetActiveDesign]
-    if {$design eq "NULL"} { error "Open a design in Capture first." }
+    set design [captureDesign $session]
     set status [DboState]
     try {
         set root [$design GetRootOccurrence $status]

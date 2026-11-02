@@ -171,7 +171,12 @@ namespace CadenceToolbox
                     form.WindowState = FormWindowState.Normal; Application.DoEvents();
                     CheckContinuousBackdrop(form);
                     close.PerformClick(); Application.DoEvents();
-                    Check(form.IsDisposed, "Caption close action");
+                    Check(!form.IsDisposed && !form.Visible && !form.ShowInTaskbar, "Caption X hides window to tray");
+                    Check(Field<NotifyIcon>(form, "mTray").Visible, "Tray icon remains after caption X");
+                    form.RestoreFromTray(); Application.DoEvents();
+                    Check(form.Visible && form.ShowInTaskbar, "Tray restores caption-hidden window");
+                    form.ExitToolbox(); Application.DoEvents();
+                    Check(form.IsDisposed, "Explicit tray exit closes toolbox");
                 }
                 Type type = typeof(AllegroHotkey).GetNestedType("ToolboxWindow", BindingFlags.NonPublic);
                 foreach (string id in new[] { "allegro-a" }) {

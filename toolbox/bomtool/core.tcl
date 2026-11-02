@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # BOM Workbench: pure Tcl 8.6; no Capture commands or external packages here.
 namespace eval ::bomtool {
-    variable version 1.3.10
+    variable version 1.3.11
     variable nativeHeaders {Reference Value {PCB Footprint} Dsecription Option EMPTY MATERIAL}
     variable lineItemDefinition "\{Reference\}\t\{Value\}\t\{PCB Footprint\}\t\{Dsecription\}\t\{Option\}\t\{EMPTY\}\t\{MATERIAL\}"
 }

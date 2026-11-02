@@ -50,6 +50,8 @@ $refs = @(
     '/r:System.IO.Compression.FileSystem.dll'
 )
 $skinSource = Join-Path $Root 'WindowSkins.cs'
+& $env:XIAOKAI_BUILD_PYTHON (Join-Path $Root 'bomtool/build.py')
+if ($LASTEXITCODE) { throw 'BOM plugin assembly failed' }
 & $env:XIAOKAI_BUILD_PYTHON (Join-Path $Root 'drc/build.py')
 if ($LASTEXITCODE) { throw 'AI bridge build failed' }
 $skinResources = @()
@@ -122,6 +124,9 @@ if (Test-Path $specgen) {
 
 # Offline marking lookup; its TSV catalog is embedded in the executable.
 & ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $Root 'markinglookup/build.ps1')))) -Root (Join-Path $Root 'markinglookup') -OutputDirectory $out -Test:$Test
+
+# Native LCEDA PCB footprint converter (single .NET Framework executable).
+& ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $Root 'lceda2allegro/build.ps1')))) -Root (Join-Path $Root 'lceda2allegro') -OutputDirectory $out -Test:$Test
 
 # Standalone startup manager, included in the auxiliary tools category.
 $startupSrc = Join-Path $Root 'startupoptimizer\StartupOptimizer.cs'

@@ -1,4 +1,5 @@
-﻿param([string]$Root = $PSScriptRoot)
+﻿# SPDX-License-Identifier: GPL-3.0-only
+param([string]$Root = $PSScriptRoot)
 $ErrorActionPreference = 'Stop'
 if (-not $env:XIAOKAI_BUILD_PYTHON) { $env:XIAOKAI_BUILD_PYTHON = (Get-Command python -ErrorAction Stop).Source }
 & $env:XIAOKAI_BUILD_PYTHON (Join-Path $Root 'build-ui.py')

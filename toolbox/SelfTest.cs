@@ -176,20 +176,37 @@ namespace CadenceToolbox
             Check("versions agree", stamped.StartsWith(shown + "."),
                 shown + " vs " + stamped);
 
-            Console.WriteLine("\nlaunched tool cleanup");
+            Console.WriteLine("\ntray lifecycle and independent applications");
             var childStart = new ProcessStartInfo(
-                Path.Combine(Environment.SystemDirectory, "cmd.exe"),
-                "/d /c ping 127.0.0.1 -n 30 >nul")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            Process child = ToolProcessManager.Start(childStart, "self-test child");
+                Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
+                "-NoProfile -NonInteractive -Command Start-Sleep -Seconds 30")
+            { UseShellExecute = false, CreateNoWindow = true };
+            Process child = ToolProcessManager.Start(childStart, "independent CAD stand-in");
             int childId = child.Id;
-            string closeErrors = ToolProcessManager.CloseAll(100);
-            Check("toolbox exit closes tracked process tree",
-                !ToolProcessManager.IsRunning(childId) && string.IsNullOrEmpty(closeErrors),
-                string.IsNullOrEmpty(closeErrors) ? "process still running" : closeErrors);
+            try
+            {
+                using (var form = new MainForm())
+                {
+                    form.ShowInTaskbar = false;
+                    form.Opacity = 0;
+                    form.Show();
+                    form.Close();
+                    Check("X hides toolbox to tray without disposing it", !form.IsDisposed && !form.Visible && !form.ShowInTaskbar, "form unexpectedly exited");
+                    Check("X leaves launched application running", ToolProcessManager.IsRunning(childId), "child stopped");
+                    form.RestoreFromTray();
+                    Check("tray restores toolbox window", form.Visible && form.ShowInTaskbar, "window not restored");
+                    form.ExitToolbox();
+                    Check("explicit tray exit disposes toolbox", form.IsDisposed, "toolbox still running");
+                    Check("explicit exit leaves launched application running", ToolProcessManager.IsRunning(childId), "child stopped");
+                }
+                ToolProcessManager.ReleaseAll();
+                Check("releasing process handles is repeatable and non-destructive", ToolProcessManager.IsRunning(childId), "child stopped");
+            }
+            finally
+            {
+                // This test owns this single sleeping process; production never terminates tools.
+                using (Process cleanup = Process.GetProcessById(childId)) { if (!cleanup.HasExited) { cleanup.Kill(); cleanup.WaitForExit(5000); } }
+            }
 
             Console.WriteLine("\n" + sPass + " passed, " + sFail + " failed");
             Environment.Exit(sFail == 0 ? 0 : 1);

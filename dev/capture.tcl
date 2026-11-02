@@ -11,7 +11,7 @@
 # stamps the value into install.cmd, so the installer cannot disagree with what
 # it installs. Bump it when changing behaviour worth telling apart across
 # machines.
-set ::lceda2orcadVersion "1.3.7"
+set ::lceda2orcadVersion "1.4.5"
 
 # Data lives beside this script: cache/ for the fetched JSON, out/ for the
 # generated XML and the .olb. The autoload folder under SPB_Data is user
@@ -51,9 +51,15 @@ proc lceda2orcadBuildXml {} {
         puts "lceda2orcad: cache is empty, nothing to build"
         return 0
     }
+    # Never unload or replace a library that an interactive placement command
+    # or a placed instance may still reference in this Capture session.
+    if {![info exists ::lceda2orcadBuildSerial]} {set ::lceda2orcadBuildSerial 0}
+    incr ::lceda2orcadBuildSerial
+    set ::lcedaOlb [file join [file dirname $::lcedaOlb] "lceda_[pid]_[clock clicks -milliseconds]_$::lceda2orcadBuildSerial.olb"]
     set lSyms {}
     set ::lcedaPkgs {}
     array unset ::lcedaByLcsc
+    array unset ::lcedaUnitsByPackage
     foreach lCode $lParts {
         if {[catch {lceda::loadCached $lCode} lRes]} {
             puts "lceda2orcad: skipping $lCode: $lRes"
@@ -71,6 +77,12 @@ proc lceda2orcadBuildXml {} {
         lappend lSyms $lSym
         lappend ::lcedaPkgs $lName
         set ::lcedaByLcsc($lCode) $lName
+        set units [list ""]
+        if {[dict exists $lSym sections]} {
+            set units {};set index 0
+            foreach unit [dict get $lSym sections] {lappend units [lceda::sectionSuffix $index];incr index}
+        }
+        set ::lcedaUnitsByPackage($lName) $units
     }
     if {![llength $lSyms]} {
         puts "lceda2orcad: no usable parts in the cache"
@@ -103,20 +115,8 @@ proc lceda2orcadBuildXml {} {
     return 1
 }
 
-# Drop our .olb from Capture's session if it is open.
-#
-# This is what makes the SECOND placement work. PlacePartEx leaves the library
-# open in the session, but we rebuild the .olb from scratch on every add -- so
-# the next round has Capture holding a DboLib for a file we just deleted and
-# replaced. Placement then either fails or hangs on a modal error.
-#
-# Cadence's own scripts treat this as a hard precondition rather than something
-# to recover from: capLibPropUtil.tcl:99 and capLibUtil.tcl:147 both call
-# GetOpenLib first and refuse to touch a library that is open. We can't refuse,
-# so we close it instead -- GetOpenLib (never GetLib, which would open it) then
-# RemoveLib, the pairing capRev.tcl:92 uses.
-#
-# A library must be unloaded before its file is deleted or overwritten.
+# Explicit user-requested removal helper only. Normal build/import/placement
+# never calls this: interactive commands can still reference previous libraries.
 proc lceda2orcadCloseOlb {} {
     if {![info exists ::DboSession_s_pDboSession]} { return 1 }
     if {[catch {
@@ -162,26 +162,11 @@ proc lceda2orcadImport {args} {
     }
     file mkdir [file dirname $::lcedaOlb]
 
-    # Close it before deleting, or Capture keeps a handle to a library whose
-    # file is gone. See lceda2orcadCloseOlb.
-    if {![lceda2orcadCloseOlb]} {
-        puts "lceda2orcad: cannot unload the generated library from Capture; close it in the current session and retry"
+    # Generated libraries are immutable within a Capture session. A second
+    # build gets a new filename, so old interactive/native references stay valid.
+    if {[file exists $::lcedaOlb]} {
+        puts "lceda2orcad: refusing to replace an existing generated library; rebuild XML first"
         return 0
-    }
-
-    # The 3-argument form of XML2OLB appends rather than overwrites, so a stale
-    # .olb would accumulate duplicate packages. Delete it first.
-    set lOlbPath [lceda2orcadOlbPath]
-    if {[file exists $lOlbPath]} {
-        if {[catch {file delete -force $lOlbPath} lErr]} {
-            puts "lceda2orcad: cannot replace $lOlbPath ($lErr)"
-            puts "lceda2orcad: close the library in Capture and retry"
-            return 0
-        }
-        if {[file exists $lOlbPath]} {
-            puts "lceda2orcad: library still exists after delete: $lOlbPath"
-            return 0
-        }
     }
 
     # mErrorInfo lives in a namespace created by Cadence's own
@@ -209,6 +194,12 @@ proc lceda2orcadImport {args} {
         puts "lceda2orcad: XML2OLB produced no library"
         return 0
     }
+    # Capture 17.4 writes a canonical on-disk spelling (commonly LCEDA.OLB).
+    # Its library/session lookup is not consistently case-insensitive. Passing
+    # the requested lower-case alias immediately after XML2OLB can crash the UI
+    # placement command for heterogeneous packages. Resolve and retain the exact
+    # file spelling for placement; later builds use new immutable filenames.
+    set ::lcedaOlb [lceda2orcadOlbPath]
     puts "lceda2orcad: built $::lcedaOlb ([file size $::lcedaOlb] bytes)"
     return 1
 }
@@ -272,7 +263,7 @@ proc lceda2orcadIsDispatchError {pErr} {
     return 0
 }
 
-proc lceda2orcadPlace {pPkg {pPropNames {}} {pPropValues {}}} {
+proc lceda2orcadPlace {pPkg {pPropNames {}} {pPropValues {}} {pDesignator ""}} {
     set lFrame [DboTclHelper_sGetConstCharPtr [capGetMostRecentSchFrameID]]
     if {[catch {ui::SchematicActivate $lFrame}]} {
         puts "lceda2orcad: no active schematic page -- open one and retry"
@@ -283,7 +274,17 @@ proc lceda2orcadPlace {pPkg {pPropNames {}} {pPropValues {}}} {
         return 0
     }
 
-    set lBase [list $::lcedaOlb $pPkg "" 0 $pPropNames $pPropValues]
+    set units [list ""]
+    if {[info exists ::lcedaUnitsByPackage($pPkg)]} {set units $::lcedaUnitsByPackage($pPkg)}
+    set pDesignator [string toupper [string trim $pDesignator]]
+    if {$pDesignator eq ""} {set pDesignator [lindex $units 0]}
+    if {[lsearch -exact $units $pDesignator] < 0} {
+        puts "lceda2orcad: invalid unit '$pDesignator' for $pPkg; available units: $units"
+        return 0
+    }
+    set ::lceda2orcadPlacedUnit $pDesignator
+    puts "lceda2orcad: place package=$pPkg unit=$pDesignator"
+    set lBase [list $::lcedaOlb $pPkg $pDesignator 0 $pPropNames $pPropValues]
     # 7 first: it keeps failures in the Command Window instead of a modal dialog.
     set lForms [list [linsert $lBase end 0] $lBase]
     # Once a build has told us which form it has, stop probing the other one --
@@ -314,7 +315,7 @@ proc lceda2orcadPlace {pPkg {pPropNames {}} {pPropValues {}}} {
 
 # One-shot: LCSC code in, placed part out.
 #   lceda2orcadAdd C2040
-proc lceda2orcadAdd {pLcsc} {
+proc lceda2orcadAdd {pLcsc {pDesignator ""}} {
     if {[catch {lceda::normalizeLcsc $pLcsc} lCode]} {
         puts "lceda2orcad: $lCode"
         return 0
@@ -335,8 +336,9 @@ proc lceda2orcadAdd {pLcsc} {
         return 0
     }
     set lPkg $::lcedaByLcsc($lCode)
+    lceda2orcadSetUnitChoices $::lcedaUnitsByPackage($lPkg)
     puts "lceda2orcad: placing $lPkg"
-    return [lceda2orcadPlace $lPkg]
+    return [lceda2orcadPlace $lPkg {} {} $pDesignator]
 }
 
 proc lceda2orcadPackages {} {
@@ -405,6 +407,65 @@ proc lceda2orcadMenuFromClip {args} {
 # vwait; a blocking wait would fight Capture's message pump. So all work
 # happens in button callbacks and the window stays open for the next part.
 set ::lceda2orcadEntry ""
+set ::lceda2orcadUnit "\u81ea\u52a8"
+set ::lceda2orcadUnitEntry ""
+set ::lceda2orcadUnitChoices [list "\u81ea\u52a8"]
+proc lceda2orcadSetUnitChoices {units} {
+    set choices [list "\u81ea\u52a8"]
+    foreach unit $units {if {$unit ne ""} {lappend choices $unit}}
+    set ::lceda2orcadUnitChoices $choices
+    if {![info exists ::lceda2orcadUnit] || $::lceda2orcadUnit ni $choices} {
+        set ::lceda2orcadUnit "\u81ea\u52a8"
+    }
+    if {[llength [info commands winfo]]} {
+        foreach widget {.lceda2orcad.unit .xiaokaiSchematicPlugins.number.unit} {
+            if {[winfo exists $widget]} {$widget configure -values $choices}
+        }
+    }
+    return $choices
+}
+# Typing reads cache only; opening the selector may download an uncached part.
+# Both entry points use parsed sections, the same data used by library creation.
+proc lceda2orcadRefreshUnits {{download 0}} {
+    set code [string toupper [string trim $::lceda2orcadEntry]]
+    if {![regexp {^C[0-9]{3,10}$} $code]} {return [lceda2orcadSetUnitChoices {}]}
+    if {![file exists [lceda::cachePath $code]]} {
+        lceda2orcadSetUnitChoices {}
+        if {!$download} {return $::lceda2orcadUnitChoices}
+        set ::lceda2orcadStatus "\u6b63\u5728\u8bfb\u53d6 $code \u7684\u5355\u5143\u6570\u91cf..."
+        update idletasks
+        if {[catch {lceda::fetch $code} message]} {
+            set ::lceda2orcadStatus "$code \u8bfb\u53d6\u5931\u8d25\uff1a$message"
+            return $::lceda2orcadUnitChoices
+        }
+    }
+    if {[catch {lceda::parseSymbol [lceda::loadCached $code]} symbol]} {
+        lceda2orcadSetUnitChoices {}
+        if {$download} {set ::lceda2orcadStatus "$code \u8bfb\u53d6\u5931\u8d25\uff1a$symbol"}
+        return $::lceda2orcadUnitChoices
+    }
+    set units {}
+    if {[dict exists $symbol sections]} {
+        set index 0
+        foreach section [dict get $symbol sections] {lappend units [lceda::sectionSuffix $index];incr index}
+    }
+    lceda2orcadSetUnitChoices $units
+    if {$download} {
+        set count [expr {max(1,[llength $units])}]
+        set ::lceda2orcadStatus "$code\uff1a$count \u4e2a\u5355\u5143\uff0c\u9009\u62e9\u540e\u70b9\u51fb\u6dfb\u52a0\u3002"
+    }
+    return $::lceda2orcadUnitChoices
+}
+proc lceda2orcadEntryChanged {args} {
+    if {$::lceda2orcadUnitEntry ne $::lceda2orcadEntry} {
+        set ::lceda2orcadUnitEntry $::lceda2orcadEntry
+        set ::lceda2orcadUnit "\u81ea\u52a8"
+        lceda2orcadRefreshUnits
+    }
+}
+if {![llength [trace info variable ::lceda2orcadEntry]]} {
+    trace add variable ::lceda2orcadEntry write lceda2orcadEntryChanged
+}
 set ::lceda2orcadStatus "\u8f93\u5165\u6216\u7c98\u8d34\u7acb\u521b\u7f16\u53f7\uff0c\u7136\u540e\u6309\u56de\u8f66\u952e\u3002"
 
 proc lceda2orcadDialogRun {} {
@@ -417,7 +478,9 @@ proc lceda2orcadDialogRun {} {
     # No event loop of our own, so nudge Tk to repaint the label before the
     # blocking fetch in lceda2orcadAdd.
     update idletasks
-    if {[lceda2orcadAdd $lLcsc]} {
+    set unit $::lceda2orcadUnit
+    if {$unit eq "\u81ea\u52a8"} {set unit ""}
+    if {[lceda2orcadAdd $lLcsc $unit]} {
         set ::lceda2orcadStatus "\u5df2\u6dfb\u52a0 $lLcsc\u3002"
     } else {
         set ::lceda2orcadStatus "$lLcsc \u6dfb\u52a0\u5931\u8d25\uff0c\u8bf7\u67e5\u770b Capture \u547d\u4ee4\u7a97\u53e3\u3002"
@@ -456,12 +519,15 @@ proc lceda2orcadMenuDialog {args} {
     } else {
         capAppUtils::capTopLevel $lForm
     }
-    wm title $lForm "\u7acb\u521bEDA\u8f6cOrCAD"
+    wm title $lForm "Orcad\u5185\u76f4\u63a5\u653e\u7f6e\u7acb\u521b\u5143\u4ef6"
     wm resizable $lForm 0 0
 
+    lceda2orcadRefreshUnits
     label  $lForm.lbl -text "\u7acb\u521b\u7f16\u53f7\uff1a"
     entry  $lForm.in -width 18 -textvariable ::lceda2orcadEntry
     button $lForm.go -text "\u6dfb\u52a0" -width 10 -command lceda2orcadDialogRun
+    label $lForm.unitLabel -text "\u5355\u5143\uff1a"
+    ttk::combobox $lForm.unit -width 12 -state readonly -textvariable ::lceda2orcadUnit -values $::lceda2orcadUnitChoices -postcommand {lceda2orcadRefreshUnits 1}
     button $lForm.cb -text "\u4ece\u526a\u8d34\u677f\u7c98\u8d34" -command lceda2orcadDialogPaste
     label  $lForm.st -textvariable ::lceda2orcadStatus -anchor w -width 44
 
@@ -469,7 +535,9 @@ proc lceda2orcadMenuDialog {args} {
     grid $lForm.in  -row 0 -column 1 -sticky we -padx 6 -pady 6
     grid $lForm.go  -row 0 -column 2 -padx 6 -pady 6
     grid $lForm.cb  -row 1 -column 1 -sticky we -padx 6 -pady {0 6}
-    grid $lForm.st  -row 2 -column 0 -columnspan 3 -sticky we -padx 6 -pady {0 6}
+    grid $lForm.unitLabel -row 2 -column 0 -sticky w -padx 6 -pady {0 6}
+    grid $lForm.unit -row 2 -column 1 -sticky we -padx 6 -pady {0 6}
+    grid $lForm.st  -row 3 -column 0 -columnspan 3 -sticky we -padx 6 -pady {0 6}
 
     # Enter runs it, so the whole flow is paste + Enter with no mouse.
     bind $lForm.in <Return> lceda2orcadDialogRun
@@ -500,26 +568,26 @@ proc lceda2orcadMenuList {args} {
 proc lceda2orcadMenuClearOlb {args} {
     set lOlbPath [lceda2orcadOlbPath]
     if {![file exists $lOlbPath]} {
-        puts "\u7acb\u521bEDA\u8f6cOrCAD\uff1a\u7f13\u5b58\u5143\u4ef6\u5e93\u6587\u4ef6\u4e0d\u5b58\u5728\uff0c\u65e0\u9700\u6e05\u9664\u3002"
+        puts "Orcad\u5185\u76f4\u63a5\u653e\u7f6e\u7acb\u521b\u5143\u4ef6\uff1a\u7f13\u5b58\u5143\u4ef6\u5e93\u6587\u4ef6\u4e0d\u5b58\u5728\uff0c\u65e0\u9700\u6e05\u9664\u3002"
         return 1
     }
 
     if {![lceda2orcadCloseOlb]} {
-        puts "\u7acb\u521bEDA\u8f6cOrCAD\uff1aCapture \u4e2d\u7684\u5668\u4ef6\u5e93\u65e0\u6cd5\u5378\u8f7d\uff0c\u672a\u5220\u9664\u6587\u4ef6\u3002"
+        puts "Orcad\u5185\u76f4\u63a5\u653e\u7f6e\u7acb\u521b\u5143\u4ef6\uff1aCapture \u4e2d\u7684\u5668\u4ef6\u5e93\u65e0\u6cd5\u5378\u8f7d\uff0c\u672a\u5220\u9664\u6587\u4ef6\u3002"
         puts "\u8bf7\u5173\u95ed Capture \u4e2d\u6253\u5f00\u7684\u7acb\u521b\u5668\u4ef6\u5e93\u540e\u91cd\u8bd5\u3002"
         return 0
     }
     if {[catch {file delete -force $lOlbPath} lErr]} {
-        puts "\u7acb\u521bEDA\u8f6cOrCAD\uff1a\u65e0\u6cd5\u6e05\u9664\u7f13\u5b58\u5143\u4ef6\u5e93 $lOlbPath\uff1a$lErr"
+        puts "Orcad\u5185\u76f4\u63a5\u653e\u7f6e\u7acb\u521b\u5143\u4ef6\uff1a\u65e0\u6cd5\u6e05\u9664\u7f13\u5b58\u5143\u4ef6\u5e93 $lOlbPath\uff1a$lErr"
         puts "\u8bf7\u786e\u8ba4\u8be5\u5e93\u672a\u88ab\u5176\u4ed6\u7a0b\u5e8f\u5360\u7528\u540e\u91cd\u8bd5\u3002"
         return 0
     }
     if {[file exists $lOlbPath]} {
-        puts "\u7acb\u521bEDA\u8f6cOrCAD\uff1a\u5220\u9664\u547d\u4ee4\u5df2\u6267\u884c\uff0c\u4f46\u6587\u4ef6\u4ecd\u5b58\u5728\uff1a$lOlbPath"
+        puts "Orcad\u5185\u76f4\u63a5\u653e\u7f6e\u7acb\u521b\u5143\u4ef6\uff1a\u5220\u9664\u547d\u4ee4\u5df2\u6267\u884c\uff0c\u4f46\u6587\u4ef6\u4ecd\u5b58\u5728\uff1a$lOlbPath"
         puts "\u8bf7\u5173\u95ed\u5176\u4ed6\u5360\u7528\u8be5\u5e93\u7684\u7a0b\u5e8f\u540e\u91cd\u8bd5\u3002"
         return 0
     }
-    puts "\u7acb\u521bEDA\u8f6cOrCAD\uff1a\u5df2\u5220\u9664\u5e93\u6587\u4ef6 $lOlbPath"
+    puts "Orcad\u5185\u76f4\u63a5\u653e\u7f6e\u7acb\u521b\u5143\u4ef6\uff1a\u5df2\u5220\u9664\u5e93\u6587\u4ef6 $lOlbPath"
     puts "\u5668\u4ef6\u6570\u636e\u7f13\u5b58\u4e0e XML \u5df2\u4fdd\u7559\uff1b\u9700\u8981\u65f6\u518d\u91cd\u65b0\u751f\u6210\u5e93\u6587\u4ef6\u3002"
     return 1
 }

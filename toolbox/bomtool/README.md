@@ -174,3 +174,7 @@ Reference\tValue\tPCB Footprint\tDsecription\tOption\tEMPTY\tMATERIAL
 Value、PCB Footprint、Option、Voltage、Tolerance、Part Number 的非空值冲突，或各分部焊接状态不同，标记 `WARN-PACKAGE-CONFLICT`。冲突位号暂不计入合并BOM，放入过滤清单待核对，其他器件继续处理。该隔离原因不表示不焊接。完成提示会明确显示待核对位号数；原始BOM页保留所有分部记录，便于核对后重新导出。没有冲突的差异记录为 `WARN-PACKAGE-METADATA`。
 
 通过37项Capture适配模拟断言、125项核心断言和XLSX/真实样例回归。未取得对方U5原理图，具体冲突字段须通过新版告警确认。工具箱安装版和绿色包更新为1.6.5；另提供独立 `bomtool-setup-v1.3.3.exe` 供对方直接更新插件，安装后重启Capture。
+
+## Capture 17.4 活动设计识别（1.3.11）
+
+BOM 改用 GetActivePMDesign 优先识别工程管理器当前 DSN，并回退到会话活动设计。两种活动上下文都为空时，枚举已经加载的设计：只有一个时使用它，多个时提示选择目标 DSN，不自动选其他工程。修复原理图打开但工具窗口获得焦点后提示未打开设计的问题；不修改原理图。

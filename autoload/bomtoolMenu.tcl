@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # BOM Workbench: pure Tcl 8.6; no Capture commands or external packages here.
 namespace eval ::bomtool {
-    variable version 1.3.10
+    variable version 1.3.11
     variable nativeHeaders {Reference Value {PCB Footprint} Dsecription Option EMPTY MATERIAL}
     variable lineItemDefinition "\{Reference\}\t\{Value\}\t\{PCB Footprint\}\t\{Dsecription\}\t\{Option\}\t\{EMPTY\}\t\{MATERIAL\}"
 }
@@ -878,12 +878,43 @@ proc ::bomtool::captureWalk {design parent rowsName} {
         $status -delete
     }
 }
+# Project Manager keeps the selected design when a modeless/Tk tool has focus.
+# Session.GetActiveDesign can legitimately return NULL in this situation.
+proc ::bomtool::captureDesign {session} {
+    if {[llength [info commands GetActivePMDesign]] &&
+        ![catch {GetActivePMDesign} design] && $design ni {NULL {}}} {
+        return $design
+    }
+    if {![catch {$session GetActiveDesign} design] && $design ni {NULL {}}} {
+        return $design
+    }
+    # Older/hotfix-specific Capture builds can have neither active-context API.
+    # A single loaded design is unambiguous; never guess with multiple designs.
+    set status [DboState]; set iter NULL; set designs {}
+    try {
+        if {![catch {$session NewDesignsIter $status} candidate] && $candidate ni {NULL {}}} {
+            set iter $candidate
+            while {1} {
+                set design [$iter NextDesign $status]
+                if {$design in {NULL {}}} {break}
+                lappend designs $design
+            }
+        }
+    } finally {
+        if {$iter ni {NULL {}} && [llength [info commands delete_DboSessionDesignsIter]]} {
+            delete_DboSessionDesignsIter $iter
+        }
+        $status -delete
+    }
+    if {[llength $designs] == 1} {return [lindex $designs 0]}
+    if {[llength $designs] > 1} {error "\u5df2\u6253\u5f00\u591a\u4e2a\u8bbe\u8ba1\uff0c\u8bf7\u5148\u5728 Capture \u5de5\u7a0b\u7ba1\u7406\u5668\u4e2d\u9009\u4e2d\u8981\u5bfc\u51fa BOM \u7684 DSN\uff0c\u518d\u8fd0\u884c\u672c\u5de5\u5177\u3002"}
+    error "\u672a\u8bc6\u522b\u5230\u5f53\u524d\u8bbe\u8ba1\uff0c\u8bf7\u5728 Capture \u5de5\u7a0b\u7ba1\u7406\u5668\u4e2d\u9009\u4e2d\u5df2\u6253\u5f00\u7684 DSN \u6216\u56fe\u7eb8\u540e\u91cd\u8bd5\u3002"
+}
 proc ::bomtool::captureRows {} {
     if {![info exists ::DboSession_s_pDboSession]} { error "Run Export Active Design inside OrCAD Capture CIS 17.4." }
     set session $::DboSession_s_pDboSession
     DboSession -this $session
-    set design [$session GetActiveDesign]
-    if {$design eq "NULL"} { error "Open a design in Capture first." }
+    set design [captureDesign $session]
     set status [DboState]
     try {
         set root [$design GetRootOccurrence $status]

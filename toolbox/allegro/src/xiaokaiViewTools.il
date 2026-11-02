@@ -268,66 +268,93 @@ procedure(xkParseLibraryPaths(value)
     list(not(quoted) paths)
   )
 )
+ ; Paths remain separate strings throughout editing; serialize only on Apply.
+procedure(xkLibraryRefresh(form variable)
+  axlFormListDeleteAll(form variable)
+  when(xkLibraryItems[variable] axlFormListAddItem(form variable xkLibraryItems[variable] -1))
+  axlFormListAddItem(form variable nil -1)
+)
+procedure(xkLibraryEdit(form variable action)
+  let((directory paths selected updated index target current)
+    paths = xkLibraryItems[variable]
+    selected = axlFormGetField(form variable)
+    cond(
+      (member(action '("browse" "add"))
+        directory = if(action == "browse" then axlDMDirectoryBrowse("." nil ?title "Library directory")
+          else axlFormGetField(form strcat("entry_" variable)))
+        when(stringp(directory) && directory != ""
+          directory = xkPathSlashes(directory)
+          unless(member(directory paths) xkLibraryItems[variable] = append1(paths directory))
+          axlFormSetField(form strcat("entry_" variable) "")))
+      (action == "remove"
+        xkLibraryItems[variable] = setof(directory paths directory != selected))
+      (member(action '("up" "down"))
+        index = 0 target = nil
+        foreach(directory paths
+          when(directory == selected target = index)
+          index = index+1)
+        when(target != nil
+          current = target
+          target = target + if(action == "up" then -1 else 1)
+          when(target >= 0 && target < length(paths)
+            index = 0
+            foreach(directory paths
+              updated = append1(updated cond((index == current nth(target paths)) (index == target selected) (t directory)))
+              index = index+1)
+            xkLibraryItems[variable] = updated)))
+    )
+    xkLibraryRefresh(form variable)
+    when(selected && member(selected xkLibraryItems[variable]) axlFormListSelect(form variable selected))
+  )
+  t
+)
 procedure(xkLibraryAction(form)
-  let((field variable directory value failed parsed settings result invalid)
+  let((field parts variable action value result failed)
     field = form->curField
     when(stringp(field) cond(
-      (rexMatchp("^browse_" field)
-        variable = cadr(parseString(field "_"))
-        directory = axlDMDirectoryBrowse("." nil ?title "选择库目录")
-        when(directory
-          value = axlFormGetField(form variable)
-          axlFormSetField(form variable strcat(value " " xkPathQuote(directory)))
-        )
-      )
       (field == "apply"
         foreach(variable '("psmpath" "padpath" "devpath")
-          parsed = xkParseLibraryPaths(axlFormGetField(form variable))
-          if(car(parsed) then settings = append1(settings list(variable cadr(parsed)))
-          else invalid = cons(upperCase(variable) invalid))
-        )
-        if(invalid then
-          axlUIWPrint(form sprintf(nil "%L 的双引号未闭合，请补齐后保存。" invalid))
-        else
-          foreach(setting settings
-            value = buildString(foreach(mapcar directory cadr(setting) xkPathQuote(directory)) " ")
-            result = errset(axlSetVariableFile(car(setting) value) t)
-            unless(result && car(result) failed = cons(upperCase(car(setting)) failed)))
-          if(failed then
-            axlUIWPrint(form sprintf(nil "保存失败：%L" failed))
-          else axlUIWPrint(form "库路径已保存并立即生效。"))
-        )
-      )
+          value = buildString(foreach(mapcar directory xkLibraryItems[variable] xkPathQuote(directory)) " ")
+          result = errset(axlSetVariableFile(variable value) t)
+          unless(result && car(result) failed = cons(upperCase(variable) failed)))
+        if(failed then axlUIWPrint(form sprintf(nil "Save failed: %L" failed))
+        else axlUIWPrint(form "Library paths saved and active.")))
       (member(field '("done" "cancel")) axlFormClose(form))
+      (rexMatchp("_" field)
+        parts = parseString(field "_")
+        action = car(parts) variable = cadr(parts)
+        when(member(action '("add" "browse" "remove" "up" "down")) xkLibraryEdit(form variable action)))
     ))
   )
   t
 )
-
 procedure(xkLibraryPaths()
-  let((definition row form pathText)
-    definition = strcat("FILE_TYPE=FORM_DEFN VERSION=2\t\nFORM\t\nFIXED\t\nPORT 112 28\t\n"
-      "HEADER \"A7 修改库路径\"\t\nTILE\t\n")
-    row = 1
+  let((definition form column)
+    when(boundp('xkLibraryForm) && xkLibraryForm errset(axlFormClose(xkLibraryForm) nil))
+    xkLibraryItems = makeTable('xkLibraryItems nil)
+    ; MENUBUTTON text uses a different legacy decoder on some Windows locales.
+    ; ASCII captions are stable in both Chinese and non-Chinese installations.
+    definition = strcat("FILE_TYPE=FORM_DEFN VERSION=2\nFORM\nFIXED\nPORT 144 37\n"
+      "HEADER \"A7 Library paths\"\nTILE\n")
+    column = 2
     foreach(variable '("psmpath" "padpath" "devpath")
+      xkLibraryItems[variable] = axlGetVariableList(variable)
+      when(stringp(xkLibraryItems[variable]) xkLibraryItems[variable] = list(xkLibraryItems[variable]))
       definition = strcat(definition sprintf(nil
-        "TEXT %L\t\nTLOC 2 %d\t\nENDTEXT\t\nFIELD %s\t\nFLOC 2 %d\t\nSTRFILLIN 90 4096\t\nENDFIELD\t\nFIELD browse_%s\t\nFLOC 94 %d\t\nMENUBUTTON \"添加目录\" 14 3\t\nENDFIELD\t\n"
-        upperCase(variable) row variable row+3 variable row+3))
-      row = row + 8
-    )
+        "TEXT %L\nTLOC %d 1\nENDTEXT\nFIELD %s\nFLOC %d 4\nLIST \"\" 44 14\nENDFIELD\nFIELD entry_%s\nFLOC %d 20\nSTRFILLIN 44 4096\nENDFIELD\n"
+        upperCase(variable) column variable column variable column))
+      foreach(spec '(("add" "Add" 0 23) ("browse" "Browse..." 14 23) ("remove" "Remove" 0 27) ("up" "Up" 14 27) ("down" "Down" 28 27))
+        definition = strcat(definition sprintf(nil
+          "FIELD %s_%s\nFLOC %d %d\nMENUBUTTON %L 12 3\nENDFIELD\n"
+          car(spec) variable column+caddr(spec) cadddr(spec) cadr(spec))))
+      column = column+47)
     definition = strcat(definition
-      "TEXT \"可填写多个目录；含空格的目录用双引号包围。\"\t\nTLOC 2 26\t\nENDTEXT\t\n"
-      "FIELD apply\t\nFLOC 90 30\t\nMENUBUTTON \"保存设置\" 18 3\t\nENDFIELD\t\nENDTILE\t\nENDFORM\t\n")
+      "TEXT \"One directory per row. Search priority follows the row order.\"\nTLOC 2 32\nENDTEXT\n"
+      "FIELD apply\nFLOC 110 33\nMENUBUTTON \"Apply\" 14 3\nENDFIELD\nFIELD done\nFLOC 127 33\nMENUBUTTON \"Close\" 14 3\nENDFIELD\nENDTILE\nENDFORM\n")
     form = axlFormCreate('xkLibraryForm list("xk_library_paths" definition) '(c inner) 'xkLibraryAction t)
     when(form
-      foreach(variable '("psmpath" "padpath" "devpath")
-        pathText = ""
-        foreach(directory axlGetVariableList(variable)
-          pathText = strcat(pathText xkPathQuote(directory) " "))
-        axlFormSetField(form variable pathText)
-      )
-      axlFormDisplay(form)
-    )
+      foreach(variable '("psmpath" "padpath" "devpath") xkLibraryRefresh(form variable))
+      axlFormDisplay(form))
   )
 )
 axlCmdRegister("xk_library_paths" 'xkLibraryPaths)

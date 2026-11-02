@@ -31,7 +31,7 @@ try {
         'toolbox/drc/netlist-tests.tcl', 'toolbox/drc/lifecycle-tests.tcl',
         'toolbox/drc/save-tests.tcl', 'toolbox/drc/usability-tests.tcl',
         'toolbox/drc/ui-tests.tcl', 'toolbox/textaffix/tests.tcl',
-        'toolbox/textaffix/capture-tests.tcl'
+        'toolbox/textaffix/capture-tests.tcl', 'dev/unit-selector-tests.tcl'
     )
     foreach ($suite in $suites) {
         & $Tclsh scripts/run-tcl-test.tcl $suite

@@ -31,8 +31,8 @@ using XiaokaiAppearance;
 // 装的是哪一版("replacing version X with Y"),不写这个属性的话 csc 会填
 // 0.0.0.0,那句话就永远是错的。两处必须一致,自检里有一条在盯这个
 // (MainForm.Version 对 AssemblyVersion)。
-[assembly: System.Reflection.AssemblyFileVersion("1.6.88.0")]
-[assembly: System.Reflection.AssemblyVersion("1.6.88.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.6.97.0")]
+[assembly: System.Reflection.AssemblyVersion("1.6.97.0")]
 [assembly: System.Reflection.AssemblyTitle("小开工具箱")]
 
 namespace CadenceToolbox
@@ -142,125 +142,14 @@ namespace CadenceToolbox
             }
         }
 
-        public static string CloseAll(int graceMilliseconds)
+        // Release our OS handles only. Launched applications own their lifetime.
+        public static void ReleaseAll()
         {
             List<TrackedProcess> processes;
-            lock (sLock)
-            {
-                processes = new List<TrackedProcess>(sProcesses);
-                sProcesses.Clear();
-            }
-
-            var errors = new StringBuilder();
-            var active = new List<TrackedProcess>();
-            foreach (TrackedProcess tracked in processes)
-            {
-                try
-                {
-                    if (tracked.Process.HasExited) continue;
-                    tracked.Process.CloseMainWindow();
-                    active.Add(tracked);
-                }
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception ex)
-                {
-                    AppendError(errors, tracked.Name, ex.Message);
-                    active.Add(tracked);
-                }
-            }
-
-            DateTime deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(0, graceMilliseconds));
-            while (DateTime.UtcNow < deadline)
-            {
-                bool anyRunning = false;
-                foreach (TrackedProcess tracked in active)
-                {
-                    try { if (!tracked.Process.HasExited) { anyRunning = true; break; } }
-                    catch (InvalidOperationException) { }
-                    catch (System.ComponentModel.Win32Exception ex)
-                    {
-                        AppendError(errors, tracked.Name, ex.Message);
-                        anyRunning = true;
-                        break;
-                    }
-                }
-                if (!anyRunning) break;
-                int remaining = (int)Math.Max(1, (deadline - DateTime.UtcNow).TotalMilliseconds);
-                Thread.Sleep(Math.Min(100, remaining));
-            }
-
-            foreach (TrackedProcess tracked in active)
-            {
-                try
-                {
-                    if (!tracked.Process.HasExited)
-                    {
-                        string error = KillProcessTree(tracked.Process);
-                        if (!string.IsNullOrEmpty(error))
-                            AppendError(errors, tracked.Name, error);
-                    }
-                }
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception ex)
-                {
-                    AppendError(errors, tracked.Name, ex.Message);
-                }
-            }
-
-            foreach (TrackedProcess tracked in processes)
-                tracked.Process.Dispose();
-            return errors.ToString();
+            lock (sLock) { processes = new List<TrackedProcess>(sProcesses); sProcesses.Clear(); }
+            foreach (TrackedProcess tracked in processes) tracked.Process.Dispose();
         }
 
-        static string KillProcessTree(Process process)
-        {
-            string taskkill = Path.Combine(Environment.SystemDirectory, "taskkill.exe");
-            string treeError = "";
-            try
-            {
-                var startInfo = new ProcessStartInfo(taskkill, "/PID " + process.Id + " /T /F")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                using (Process killer = Process.Start(startInfo))
-                {
-                    if (killer == null) throw new InvalidOperationException("无法启动 taskkill.exe。");
-                    if (!killer.WaitForExit(5000))
-                    {
-                        killer.Kill();
-                        treeError = "taskkill.exe 等待超时。";
-                    }
-                    else if (killer.ExitCode != 0 && !process.HasExited)
-                        treeError = "taskkill.exe 未能结束进程。";
-                }
-            }
-            catch (Exception ex)
-            {
-                treeError = ex.Message;
-            }
-
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill();
-                    if (!process.WaitForExit(3000))
-                        return "强制结束请求已发送，但主进程仍在运行。";
-                }
-            }
-            catch (Exception ex)
-            {
-                return "结束进程树失败：" + treeError + "；结束主进程失败：" + ex.Message;
-            }
-            return treeError;
-        }
-
-        static void AppendError(StringBuilder errors, string name, string message)
-        {
-            if (errors.Length > 0) errors.AppendLine();
-            errors.Append(name).Append(": ").Append(message);
-        }
     }
 
     static class Paths
@@ -1640,9 +1529,13 @@ namespace CadenceToolbox
         Label mHelpToggle;
         Panel mHelpPanel;
         bool mHelpExpanded;
+        NotifyIcon mTray;
+        bool mExitRequested;
+        bool mDisposedTray;
+        FormWindowState mRestoreWindowState = FormWindowState.Normal;
         readonly HashSet<string> mExpandedPluginGroups = new HashSet<string>();
         // public 是为了让自检能对着上面的 AssemblyFileVersion 比一遍。
-        public const string Version = "1.6.88";
+        public const string Version = "1.6.97";
         string mBackdropId;
         bool mBackdropPending;
         readonly Dictionary<Control, Rectangle> mBackdropSurfaces = new Dictionary<Control, Rectangle>();
@@ -1676,6 +1569,7 @@ namespace CadenceToolbox
             BuildSidebar();
             Resize += delegate { SizeContent(); };
             Activated += delegate { ShowCategory(); };
+            BuildTray();
             FormClosing += OnMainFormClosing;
 
             if (Manifest.Error != null)
@@ -1754,6 +1648,7 @@ namespace CadenceToolbox
             if (disposing && BackgroundImage != null) {
                 Image image = BackgroundImage; BackgroundImage = null; image.Dispose();
             }
+            if (disposing) DisposeTray();
             base.Dispose(disposing);
         }
 
@@ -2683,15 +2578,56 @@ namespace CadenceToolbox
             }
         }
 
+        void BuildTray()
+        {
+            var menu = new ContextMenuStrip();
+            menu.Items.Add("显示工具箱", null, delegate { RestoreFromTray(); });
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("退出工具箱", null, delegate { ExitToolbox(); });
+            mTray = new NotifyIcon {
+                Icon = Icon ?? SystemIcons.Application, Text = "小开工具箱",
+                ContextMenuStrip = menu, Visible = true
+            };
+            mTray.DoubleClick += delegate { RestoreFromTray(); };
+        }
+
+        internal void RestoreFromTray()
+        {
+            ShowInTaskbar = true;
+            Show();
+            WindowState = mRestoreWindowState;
+            Activate();
+        }
+
+        internal void ExitToolbox()
+        {
+            mExitRequested = true;
+            Close();
+        }
+
         void OnMainFormClosing(object sender, FormClosingEventArgs e)
         {
-            string errors = ToolProcessManager.CloseAll(8000);
-            if (!string.IsNullOrEmpty(errors))
+            if (!mExitRequested && e.CloseReason == CloseReason.UserClosing)
             {
-                MessageBox.Show("关闭已启动的工具时遇到问题，部分进程可能仍在运行：\n\n" + errors,
-                    "小开工具箱", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                e.Cancel = true;
+                if (WindowState != FormWindowState.Minimized) mRestoreWindowState = WindowState;
+                Hide();
+                ShowInTaskbar = false;
+                return;
             }
+            ToolProcessManager.ReleaseAll();
+            DisposeTray();
         }
+
+        void DisposeTray()
+        {
+            if (mDisposedTray || mTray == null) return;
+            mDisposedTray = true;
+            mTray.Visible = false;
+            if (mTray.ContextMenuStrip != null) mTray.ContextMenuStrip.Dispose();
+            mTray.Dispose();
+        }
+
 
         // "+ 添加其他软件"。选个 exe、给个名字、挑个分类,追加到 tools.local.ini。
         //

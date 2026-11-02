@@ -46,6 +46,20 @@ $w.results.tv selection set lceda
 check {[xiaokaiSchematicPluginsRun] == 0} "Group is not an action"
 check {![winfo exists $w.appearance]} "No skin picker"
 check {[::xiaokai::schematicPlugins::readSkin] eq "orcad-a"} "Fixed blue and white appearance"
+$tree selection set lceda_number
+xiaokaiSchematicPluginsUpdateSelection
+update
+check {[winfo ismapped $w.number.in]} "LCEDA input is embedded below selected action"
+check {[xiaokaiSchematicPluginsRun] == 1} "Number action focuses inline input"
+check {![winfo exists .lceda2orcad]} "Number action does not open a dialog"
+proc lceda2orcadDialogRun {} {set ::addedCode $::lceda2orcadEntry;set ::lceda2orcadStatus "\u5df2\u6dfb\u52a0 $::addedCode\u3002"}
+set ::lceda2orcadEntry C41429303
+$w.number.add invoke
+check {$::addedCode eq "C41429303" && $::lceda2orcadEntry eq ""} "Success clears the inline input for the next part"
+$tree selection set lceda_clip
+xiaokaiSchematicPluginsUpdateSelection
+update
+check {![winfo ismapped $w.number]} "Inline entry hides on other actions"
 destroy $w
 check {[xiaokaiSchematicPluginsOpen] == 1} "Window can reopen"
 check {[::xiaokai::schematicPlugins::readSkin] eq "orcad-a"} "Reopen retains fixed appearance"

@@ -49,7 +49,7 @@ namespace XiaokaiSetup
     {
         // 跟 Toolbox.cs 里的 Version 保持一致 —— build-setup.ps1 会核对,不一致直接
         // 报错。发版必须动这里(见 ship-requires-version-bump 笔记)。
-        public const string Version = "1.6.88";
+        public const string Version = "1.6.97";
         public const string AppName  = "小开工具箱";
         public const string AppExe   = "XiaokaiToolbox.exe";
         public const string UninExe  = "uninstall.exe";
@@ -569,6 +569,10 @@ namespace XiaokaiSetup
         public static readonly Comp[] Extras = new Comp[]
         {
             new Comp {
+                Key="lceda2allegro", Title="立创 PCB 封装一键转 Allegro",
+                Note="与 OrCAD 立创元件工具配套，按编号生成 Allegro 封装，可勾选附加 AD / PADS 输出；需要本机 Allegro 及许可证。",
+                Res="lceda2allegro.exe", File="立创封装转Allegro.exe", Default=true },
+            new Comp {
                 Key="markinglookup", Title="常见丝印反查",
                 Note="离线按丝印、型号和封装反查贴片器件，支持分类筛选及复制条目。",
                 Res="markinglookup.exe", File="常见丝印反查.exe", Default=true },
@@ -913,6 +917,48 @@ namespace XiaokaiSetup
             return IsTargetProcessPath(target, image);
         }
 
+        sealed class ProcessCheckReport : IReport
+        {
+            public int Steps;
+            public string Failure;
+            public void Step(string value) { Steps++; }
+            public void Fail(string value) { Failure = value; }
+            public void Ok(string value) { }
+            public void Warn(string value) { }
+            public void Note(string value) { }
+            public void Bytes(long value) { }
+            public void Phase(string value) { }
+        }
+
+        internal static string TestFirstInstallProcessCheck()
+        {
+            string target = Path.Combine(Path.GetTempPath(), "xk-fresh-install-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                foreach (bool force in new bool[] { true, false })
+                {
+                    var report = new ProcessCheckReport();
+                    var worker = new Worker(report, target); worker.ForceCloseTools = force;
+                    if (!worker.CloseRunning() || report.Failure != null || report.Steps != 0)
+                        return "Fresh target performed process checks.";
+                    if (Directory.Exists(target)) return "Process check created the target prematurely.";
+                }
+                var createReport = new ProcessCheckReport();
+                if (!new Worker(createReport, target).MakeDir() || !Directory.Exists(target))
+                    return "Fresh target was not created after process check.";
+                foreach (bool force in new bool[] { true, false })
+                {
+                    var report = new ProcessCheckReport();
+                    var worker = new Worker(report, target); worker.ForceCloseTools = force;
+                    if (!worker.CloseRunning() || report.Failure != null || report.Steps != 1)
+                        return "Existing target did not execute its process check.";
+                }
+                return null;
+            }
+            catch (Exception ex) { return ex.ToString(); }
+            finally { if (Directory.Exists(target)) Directory.Delete(target); }
+        }
+
         // 进度条的分母。只算要写的字节,注册表和快捷方式那几步几乎不花时间。
         public long Total()
         {
@@ -950,6 +996,9 @@ namespace XiaokaiSetup
         // 装之前先让旧版退出,否则文件被占住写不进去。
         bool CloseRunning()
         {
+            // A fresh installation has no old files or processes in its target.
+            // Directory enumeration is valid only after this existence check.
+            if (!Directory.Exists(Dir)) return true;
             R.Step(ForceCloseTools ? "强制结束安装目录中的工具进程" : "关闭正在运行的旧版本");
             int killed = 0;
             int currentId = Process.GetCurrentProcess().Id;
@@ -2026,6 +2075,9 @@ namespace XiaokaiSetup
             t("拒绝将工具安装到磁盘根目录",
               Locate.Check(volumeRoot) != null,
               "磁盘根目录被安装位置检查接受");
+
+            string firstInstall = Worker.TestFirstInstallProcessCheck();
+            t("首次安装跳过进程检查并创建目录，已有目录保留检查", firstInstall == null, firstInstall ?? "");
 
             string targetExe = Path.Combine(Path.GetTempPath(), "xk-tools", "sample.exe");
             string otherExe = Path.Combine(Path.GetTempPath(), "other-tools", "sample.exe");

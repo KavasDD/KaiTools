@@ -102,6 +102,7 @@ $payload = [ordered]@{
     'specgen.ico'                  = Join-Path $root 'specgen.ico'
     'jlc3d.exe'                    = Join-Path $out  'JLC3D-Downloader.exe'
     'jlc3d.ico'                    = Join-Path $root 'jlc3d.ico'
+    'lceda2allegro.exe'            = Join-Path $out '立创封装转Allegro.exe'
     'markinglookup.exe'            = Join-Path $out '常见丝印反查.exe'
     'startupoptimizer.exe'         = Join-Path $out 'OrCAD启动优化工具.exe'
 }
@@ -126,7 +127,7 @@ foreach ($file in @(Get-ChildItem -LiteralPath $legalDir -File -Recurse | Sort-O
 $must = @(
     'app.exe', 'tools.ini', 'logo.ico', 'lceda2orcadMenu.tcl',
     'bomtoolMenu.tcl', 'netlocatorMenu.tcl', 'drctoolMenu.tcl', 'textaffixMenu.tcl', 'xiaokaiSchematicPlugins.tcl',
-    'startupoptimizer.exe', 'markinglookup.exe'
+    'startupoptimizer.exe', 'markinglookup.exe', 'lceda2allegro.exe'
 )
 $must += @($payload.Keys | Where-Object { $_ -like 'allegro.*' })
 $must += @($legalResourceFiles.Keys)
@@ -195,6 +196,7 @@ $greenFiles = @{
     'specgen.ico'           = 'specgen.ico'
     'jlc3d.exe'             = 'JLC3D-Downloader.exe'
     'jlc3d.ico'             = 'jlc3d.ico'
+    'lceda2allegro.exe'    = '立创封装转Allegro.exe'
     'markinglookup.exe'    = '常见丝印反查.exe'
     'startupoptimizer.exe' = 'OrCAD启动优化工具.exe'
 }
@@ -223,6 +225,7 @@ $readme = @"
     JLC3D-Downloader.exe        按编号批量下载封装的 3D 模型
     OrCAD启动优化工具.exe       按需停用启动功能，备份与恢复
     常见丝印反查.exe             离线丝印反查，支持分类、封装筛选与复制
+    立创封装转Allegro.exe        按立创编号生成 Allegro 封装，可勾选附加 AD / PADS 封装
 
 想自己加别的软件快捷方式
     在主程序里点"添加其他软件"就行,它会写到 tools.local.ini。这个文件升级时
@@ -255,7 +258,8 @@ OrCAD 原理图插件
     卸载安装版时默认保留插件，也可取消“保留 OrCAD 原理图插件”并删除，已备份的
     原文件会恢复。卸载后请重启 Capture。
 
-退出工具箱会先请求正常关闭由工具箱启动的程序,等待 8 秒后强制结束仍运行的进程树。
+点击右上角 × 收起到系统托盘，双击托盘图标恢复；托盘右键“退出工具箱”才真正退出。
+收起或退出工具箱都不会关闭 Capture、Allegro 或其他已启动程序，不会触发工程保存提示。
 安装器默认勾选“强制结束已安装目录中的工具进程及其子进程”；请先保存工程和其他
 未保存内容。手动启动的程序不受工具箱退出清理影响。
 

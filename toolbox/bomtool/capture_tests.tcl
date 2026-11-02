@@ -172,4 +172,35 @@ dict unset ::objects c1 fail
 dict set ::objects c1 ref C?
 assert {[catch {::bomtool::captureRows} message] && [string match *unannotated* $message]}
 assert {[dict size $::states] == 0 && [dict size $::iters] == 0 && [dict size $::ptrs] == 1}
+# Modeless-tool focus can clear Session.GetActiveDesign while PM still owns a design.
+rename session realSession
+proc session {method args} {
+    if {$method eq "GetActiveDesign"} {return $::activeTestDesign}
+    if {$method eq "NewDesignsIter"} {return designIter}
+    error $method
+}
+set ::activeTestDesign NULL
+proc GetActivePMDesign {} {return $::pmTestDesign}
+set ::pmTestDesign design
+assert {[::bomtool::captureDesign session] eq "design"}
+set ::pmTestDesign ""
+set ::activeTestDesign design
+assert {[::bomtool::captureDesign session] eq "design"}
+set ::activeTestDesign NULL
+proc designIter {method args} {
+    if {$method ne "NextDesign"} {error $method}
+    if {![llength $::openTestDesigns]} {return NULL}
+    set design [lindex $::openTestDesigns 0];set ::openTestDesigns [lrange $::openTestDesigns 1 end];return $design
+}
+set ::deletedDesignIter 0
+proc delete_DboSessionDesignsIter {iter} {incr ::deletedDesignIter}
+set ::openTestDesigns {design}
+assert {[::bomtool::captureDesign session] eq "design" && $::deletedDesignIter == 1}
+set ::openTestDesigns {design otherDesign}
+assert {[catch {::bomtool::captureDesign session} message] && [string match *DSN* $message]}
+set ::openTestDesigns {}
+assert {[catch {::bomtool::captureDesign session} message]}
+assert {$::deletedDesignIter == 3 && [dict size $::states] == 0}
+rename GetActivePMDesign {}
+rename session {};rename realSession session
 puts "PASS: $::count Capture adapter contract assertions (Tcl [info patchlevel])"

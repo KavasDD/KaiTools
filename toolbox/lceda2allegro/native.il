@@ -1,0 +1,71 @@
+; Native creation helpers for Allegro 17.4. Every geometry call must succeed.
+procedure(xkMust(value description)
+ unless(value error("LCEDA conversion failed: %s\n" description))
+ value
+)
+procedure(xkPad(name shape layer w h drill plated mask paste number xy angle slot slotAngle)
+ let((pads figure maskFigure pasteFigure layers ps pin text dr)
+  when(slot>0
+   ; Native slots are along X. Rotate the complete padstack into source orientation.
+   when(abs(sin((angle-slotAngle)*acos(-1)/180))>0.5
+    text=w w=h h=text)
+   angle=slotAngle
+  )
+  figure=case(shape
+   ("POLYGON" strcat(name "_cu"))
+   ("RECT" if(round(w*10000)==round(h*10000) then 'SQUARE else 'RECTANGLE))
+   ("ELLIPSE" 'CIRCLE)
+   ("OVAL" if(round(w*10000)==round(h*10000) then 'CIRCLE else if(w>=h then 'OBLONG_X else 'OBLONG_Y))))
+  maskFigure=if(shape=="POLYGON" && abs(mask)>0.0000000001 then strcat(name "_sm") else figure)
+  pasteFigure=if(shape=="POLYGON" && abs(paste)>0.0000000001 then strcat(name "_pm") else figure)
+  pads=nil
+  layers=if(layer==11 then list("TOP" "DEFAULT_INTERNAL" "BOTTOM") else if(layer==2 then list("BOTTOM") else list("TOP")))
+  when(layer!=11 || plated
+   foreach(lay layers
+    pads=cons(make_axlPadStackPad(?layer lay ?type 'REGULAR ?figure figure ?figureSize w:h) pads)
+   )
+  )
+  foreach(side if(layer==11 then list("TOP" "BOTTOM") else if(layer==2 then list("BOTTOM") else list("TOP")))
+   pads=cons(make_axlPadStackPad(?layer strcat("SOLDERMASK_" side) ?type 'REGULAR ?figure maskFigure ?figureSize (w+2*mask):(h+2*mask)) pads)
+   when(layer!=11 && w+2*paste>0 && h+2*paste>0
+    pads=cons(make_axlPadStackPad(?layer strcat("PASTEMASK_" side) ?type 'REGULAR ?figure pasteFigure ?figureSize (w+2*paste):(h+2*paste)) pads)
+   )
+  )
+  dr=if(slot>0 then make_axlPadStackDrill(?holeType 'OVAL_SLOT ?slotSize slot:drill ?plating if(plated then 'PLATED else 'NON_PLATED))
+   else when(drill>0 make_axlPadStackDrill(?holeType 'CIRCLE_DRILL ?drillDiameter drill ?plating if(plated then 'PLATED else 'NON_PLATED))))
+  ps=xkMust(axlDBCreatePadStack(name dr pads) name)
+  xkMust(axlPadstackToDisk(name) strcat("save pad " name))
+  text=make_axlTextOrientation(?textBlock 1 ?justify "center")
+  pin=if(number=="" then nil else make_axlPinText(?number number ?offset 0:0 ?text text))
+  xkMust(axlDBCreatePin(name xy pin angle) strcat("pin " number))
+ ))
+procedure(xkPolySymbol(name points expansion)
+ let((shape polygons)
+  xkMust(axlOpenDesign(?design strcat(name ".dra") ?mode "nf" ?noMru t) "new shape drawing")
+  axlSetSymbolType("shape")
+  axlDBChangeDesignUnits("millimeters" 6)
+  axlDBChangeDesignExtents(list(-100:-100 100:100))
+  shape=car(xkMust(axlDBCreateShape(axlPathStart(points 0) t "ETCH/TOP" nil nil) "polygon copper"))
+  when(expansion!=0
+   polygons=axlPolyExpand(car(axlPolyFromDB(shape)) expansion 'NONE)
+   xkMust(polygons "polygon mask offset")
+   unless(length(polygons)==1 error("Polygon mask offset splits the pad\n"))
+   xkMust(axlDeleteObject(shape) "remove original polygon")
+   xkMust(axlDBCreateShape(car(polygons) t "ETCH/TOP" nil nil) "offset polygon"))
+  xkMust(axlSaveDesign(?design strcat(name ".dra") ?noMru t ?noConfirm t) "save shape drawing")
+  xkMust(axlCompileSymbol(?symbol name ?type "shape") "compile SSM")
+  t))
+procedure(xkDraw(points width layer filled)
+ let((path)
+  path=axlPathStart(points width)
+
+  if(filled then xkMust(axlDBCreateShape(path t layer nil nil) layer)
+   else xkMust(axlDBCreatePath(path layer 'line nil) layer))
+ ))
+procedure(xkRunFootprint()
+ let((result status)
+  result=errset(xkBuildFootprint() t)
+  status=outfile("conversion.status")
+  if(result then fprintf(status "OK\n") else fprintf(status "ERROR: see allegro.jrl and symbol log\n"))
+  close(status)
+ ))
