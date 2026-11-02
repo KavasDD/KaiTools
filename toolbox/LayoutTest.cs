@@ -59,7 +59,17 @@ namespace CadenceToolbox
                     var split = Field<SplitContainer>(form, "mSplit");
                     foreach (Size size in new[] { new Size(1024, 620), new Size(960, 600), new Size(1400, 800) })
                     {
-                        form.ClientSize = size;
+                        // A hosted desktop can be smaller than a requested test
+                        // window. Windows clamps its restore bounds to that desktop.
+                        Size border = new Size(form.Width - form.ClientSize.Width,
+                            form.Height - form.ClientSize.Height);
+                        Rectangle area = Screen.FromControl(form).WorkingArea;
+                        Size client = new Size(Math.Min(size.Width, area.Width - border.Width),
+                            Math.Min(size.Height, area.Height - border.Height));
+                        form.Location = area.Location;
+                        form.ClientSize = client;
+                        Application.DoEvents();
+                        Size expectedSize = form.ClientSize;
                         for (int round = 0; round < 3; round++)
                         {
                             for (int i = 0; i < categories.Items.Count; i++)
@@ -72,7 +82,8 @@ namespace CadenceToolbox
                                 ResizeContent(form);
                                 form.WindowState = FormWindowState.Normal;
                                 Application.DoEvents();
-                                Check(form.ClientSize == size, "Restore preserves window size");
+                                Check(form.ClientSize == expectedSize, "Restore preserves window size: expected "
+                                    + expectedSize + ", actual " + form.ClientSize);
                                 CheckDistance(split);
                             }
                         }
